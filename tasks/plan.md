@@ -40,7 +40,7 @@ tools ───────┘                              │    │    │
 - [x] Task 2: Typed chat end to end (config + brain + app, no tools)
 - [x] Task 3: Time and battery answers (tool loop + first tools)
 - [x] Task 4: Volume control and lock
-- [ ] Task 5: Shutdown and restart with confirmation
+- [x] Task 5: Shutdown and restart with confirmation
 
 ### Checkpoint A: Typed Jarvis is usable every day
 - [ ] SPEC success criteria 1–5 and 9 pass

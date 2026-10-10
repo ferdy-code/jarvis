@@ -83,7 +83,7 @@ Plan: [plan.md](plan.md) · Spec: [SPEC.md](../SPEC.md)
 
 ---
 
-### Task 5: Shutdown and restart with confirmation
+### Task 5: Shutdown and restart with confirmation ✅ (real "y" run left to the user)
 **Description:** Add a `power(action)` tool marked `dangerous=True`. `Brain` asks the injected `confirm` callback before running it. `app` supplies a terminal `y/n` prompt.
 
 **Acceptance criteria:**

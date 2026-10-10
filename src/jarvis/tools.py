@@ -52,6 +52,15 @@ def lock_pc() -> str:
     return "locked"
 
 
+def power(action: str) -> str:
+    flags = {"shutdown": "/s", "restart": "/r"}
+    if action not in flags:
+        return f"error: action must be shutdown or restart, not {action!r}"
+    subprocess.run(["shutdown", flags[action], "/t", "5"], check=True)
+    verb = "shutting down" if action == "shutdown" else "restarting"
+    return f"{verb} in 5 seconds"
+
+
 def _tool(
     fn: Callable[..., str],
     description: str,
@@ -90,4 +99,11 @@ TOOLS: dict[str, Tool] = {
         required=["direction"],
     ),
     "lock_pc": _tool(lock_pc, "Lock the Windows screen."),
+    "power": _tool(
+        power,
+        "Shut down or restart the PC. Only call this when the user clearly asks.",
+        properties={"action": {"type": "string", "enum": ["shutdown", "restart"]}},
+        required=["action"],
+        dangerous=True,
+    ),
 }

@@ -126,3 +126,29 @@ def test_volume_schema_lists_the_directions():
         "unmute",
     ]
     assert schema["required"] == ["direction"]
+
+
+def record_commands(monkeypatch):
+    commands = []
+    monkeypatch.setattr(tools.subprocess, "run", lambda cmd, **_: commands.append(cmd))
+    return commands
+
+
+def test_power_shutdown_and_restart_use_a_5_second_delay(monkeypatch):
+    commands = record_commands(monkeypatch)
+
+    assert "shutting down" in tools.power("shutdown")
+    assert "restarting" in tools.power("restart")
+    assert commands == [["shutdown", "/s", "/t", "5"], ["shutdown", "/r", "/t", "5"]]
+
+
+def test_power_rejects_anything_else_without_running_a_command(monkeypatch):
+    commands = record_commands(monkeypatch)
+
+    assert tools.power("hibernate").startswith("error:")
+    assert commands == []
+
+
+def test_power_is_registered_as_dangerous_and_the_rest_are_not():
+    assert tools.TOOLS["power"].dangerous is True
+    assert [n for n, t in tools.TOOLS.items() if t.dangerous] == ["power"]

@@ -15,8 +15,9 @@ def call(name, arguments="{}", id="call-1"):
     )
 
 
-def tool(fn):
-    return Tool(fn=fn, schema={"type": "function", "function": {"name": "t"}})
+def tool(fn, dangerous=False):
+    schema = {"type": "function", "function": {"name": "t"}}
+    return Tool(fn=fn, schema=schema, dangerous=dangerous)
 
 
 class FakeClient:
@@ -224,3 +225,58 @@ def test_history_keeps_only_the_text_of_a_tool_turn():
         ("assistant", "It is 10:00."),
         ("user", "thanks"),
     ]
+
+
+def risky_brain(client, confirm, runs):
+    risky = tool(lambda action: runs.append(action) or "done", dangerous=True)
+    return Brain(client, model="m", tools={"power": risky}, confirm=confirm)
+
+
+def test_dangerous_tool_runs_after_the_user_confirms():
+    runs, questions = [], []
+    client = FakeClient([call("power", '{"action": "restart"}'), "Restarting."])
+    brain = risky_brain(client, lambda q: questions.append(q) or True, runs)
+
+    reply = brain.ask("restart the pc")
+
+    assert runs == ["restart"]
+    assert reply == "Restarting."
+    assert "power" in questions[0] and "restart" in questions[0]
+
+
+def test_dangerous_tool_does_not_run_when_the_user_refuses():
+    runs = []
+    client = FakeClient([call("power", '{"action": "shutdown"}'), "Okay, cancelled."])
+    brain = risky_brain(client, lambda q: False, runs)
+
+    reply = brain.ask("shut down")
+
+    assert runs == []
+    assert reply == "Okay, cancelled."
+    assert tool_results(client, 1)[0]["content"] == "cancelled by user"
+
+
+def test_dangerous_tool_does_not_run_when_nobody_can_be_asked():
+    runs = []
+    client = FakeClient([call("power", '{"action": "shutdown"}'), "I can't."])
+    brain = risky_brain(client, confirm=None, runs=runs)
+
+    brain.ask("shut down")
+
+    assert runs == []
+    assert tool_results(client, 1)[0]["content"].startswith("cancelled")
+
+
+def test_safe_tool_never_asks_for_confirmation():
+    asked = []
+    client = FakeClient([call("clock"), "10:00."])
+    brain = Brain(
+        client,
+        model="m",
+        tools={"clock": tool(lambda: "10:00")},
+        confirm=lambda q: asked.append(q) or True,
+    )
+
+    brain.ask("time?")
+
+    assert asked == []

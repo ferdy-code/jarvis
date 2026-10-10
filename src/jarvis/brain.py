@@ -1,4 +1,5 @@
 import json
+from collections.abc import Callable
 
 import openai
 
@@ -32,11 +33,14 @@ class Brain:
         client,
         model: str,
         tools: dict[str, Tool] | None = None,
+        confirm: Callable[[str], bool] | None = None,
         extra_body: dict | None = None,
     ):
         self.client = client
         self.model = model
         self.tools = tools or {}
+        # Asked before any dangerous tool runs. With no way to ask, those never run.
+        self.confirm = confirm
         self.extra_body = extra_body
         # Only user and assistant text is remembered between turns. Tool calls
         # live in the per-turn message list, so trimming can never split a
@@ -89,10 +93,18 @@ class Brain:
             arguments = json.loads(tool_call.function.arguments or "{}")
         except json.JSONDecodeError as error:
             return f"error: bad arguments ({error})"
+        if tool.dangerous and not self._confirmed(name, arguments):
+            return "cancelled by user"
         try:
             return str(tool.fn(**arguments))
         except Exception as error:  # noqa: BLE001 - a broken tool must not crash Jarvis
             return f"error: {error}"
+
+    def _confirmed(self, name: str, arguments: dict) -> bool:
+        if self.confirm is None:
+            return False
+        details = ", ".join(f"{key}={value}" for key, value in arguments.items())
+        return self.confirm(f"{name}({details})")
 
 
 def _assistant_message(message) -> dict:
