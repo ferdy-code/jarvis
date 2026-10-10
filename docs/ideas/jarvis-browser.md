@@ -29,22 +29,16 @@ and it keeps every existing guarantee. B builds on it once A is in daily use.
 
 ## Key Assumptions to Validate (before writing feature code)
 
-- [ ] **Autoplay: BLOCKED, three tests** (2026-10-10; the third was after the user said it was
-  allowed: silent for 25 s, and none of the six Firefox profiles has an autoplay permission
-  row or a `media.autoplay.*` preference saved, so the change never reached Firefox's files). The second
-  test used `browser.open_url` into the Keina Nara profile after the user said autoplay was
-  allowed: silent for 25 s, and that profile had no autoplay permission row and no
-  `media.autoplay.*` preference saved. The Autoplay > Settings dialog may only set the
-  default for all sites; the reliable per-site route is the site-info panel on a
-  `music.youtube.com` tab (Permissions > Autoplay > Allow Audio and Video). Re-test after that.
-  First test, with the default settings: With everything paused, a track
-  opened by its link (`music.youtube.com/watch?v=ID`) stayed silent for 25 s; the tab showed
-  only "YouTube Music". Firefox does not let a page play sound until the user has clicked on
-  it, and a page opened by another program has had no click. Measured with Windows' audio
-  meter (`pycaw`), no ears needed. Fix, once, by the user: allow audio and video for
-  `music.youtube.com` (Firefox Settings > Privacy & Security > Permissions > Autoplay >
-  Settings). Then re-run the test. A media key cannot start the new track: it goes to the
-  most recent media session, which is the old tab.
+- [x] **Autoplay: WORKS once allowed per site** (confirmed 2026-10-10 on the fourth test).
+  By default Firefox blocks it: a track opened by its link stayed silent for 25 s, three
+  times. It worked after the user allowed it for `music.youtube.com` through the lock icon
+  in the address bar (Permissions > Autoplay > Allow Audio and Video) in the Keina Nara
+  profile. That saved `https://music.youtube.com autoplay-media=1` in the profile's
+  `permissions.sqlite` (the Autoplay > Settings dialog had saved nothing in any of the six
+  profiles). Result: the song started 1.7 s after `browser.open_url`, kept playing, and the
+  media Play/Pause key paused it, resumed it and paused it again (0.2 s each). Measured with
+  Windows' audio meter. Lesson: read the saved file before trusting that a setting took
+  effect.
 - [~] **Window focus:** partly confirmed (2026-10-10). A background Python program can bring
   Firefox to the front (`SetForegroundWindow` after a tap of Alt), and the terminal gets the
   focus back afterwards. Page Down scrolled a test page and Ctrl+W closed a tab. Not
@@ -81,7 +75,7 @@ accounts.
 
 - **Firefox profile decided (2026-10-10): Keina Nara.** Jarvis opens everything in that profile (`JARVIS_FIREFOX_PROFILE`). The music plays there. The autoplay permission must be set in that profile.
 - **Done: `open_website` and `search_web`**, plus the profile targeting. Checked with the real Firefox: the page opened in the Keina Nara window. Model sampling: 21/21 site requests with valid addresses, 15/15 searches, 30/30 ordinary questions opened nothing, and the other tools were unchanged.
-- **Next:** `play_youtube_music(query)` (needs the autoplay permission for `music.youtube.com` in the Keina Nara profile) and `browser_control` (media keys confirmed: pause and resume in 0.2 s; scroll with Page Down).
+- **Next:** `play_youtube_music(query)` (autoplay confirmed, so this is unblocked) and `browser_control` (media keys confirmed: pause and resume in 0.2 s; scroll with Page Down).
 
 ## Not Doing (and Why)
 
