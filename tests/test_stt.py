@@ -144,3 +144,134 @@ def test_mic_peak_is_the_loudest_sample_after_the_device_warms_up(monkeypatch):
     monkeypatch.setattr("sounddevice.InputStream", Stream)
 
     assert stt.mic_peak(seconds=0.8) == np.float32(0.3)
+
+
+class BlockStream:
+    """A microphone that plays int16 blocks, then silence, and notes if it was closed."""
+
+    def __init__(self, *blocks):
+        self.blocks = iter(blocks)
+        self.closed = False
+
+    def read(self, frames):
+        block = next(self.blocks, None)
+        if block is None:
+            block = np.zeros(frames, dtype=np.int16)
+        return block.reshape(-1, 1), False
+
+    def __exit__(self, *_):
+        self.closed = True
+
+
+def test_listen_records_from_the_given_stream_and_hands_float_audio_to_whisper(
+    monkeypatch,
+):
+    heard = []
+
+    class Whisper:
+        def transcribe(self, audio, **_):
+            heard.append(audio)
+            return iter([SimpleNamespace(text=" yes ")]), SimpleNamespace(
+                language="en", all_language_probs=[("en", 1.0)]
+            )
+
+    monkeypatch.setattr(stt, "_model", lambda: Whisper())
+    loud = np.full(stt.BLOCK, 16384, dtype=np.int16)  # half of full scale
+    stream = BlockStream(*[loud] * 5)
+
+    assert stt.listen(stream) == ("yes", "en")
+
+    audio = heard[0]
+    assert audio.dtype == np.float32
+    assert abs(float(audio.max()) - 0.5) < 0.01
+    assert not stream.closed  # the caller owns the microphone
+
+
+def test_listen_gives_up_when_nobody_speaks(monkeypatch):
+    monkeypatch.setattr(stt, "_model", lambda: None)
+
+    assert stt.listen(BlockStream()) == ("", "en")
+
+
+def quiet_voice(level=0.007):
+    return np.full(stt.BLOCK, level, dtype=np.float32)
+
+
+def test_a_dip_below_the_threshold_does_not_end_the_recording(monkeypatch):
+    monkeypatch.setattr(stt.config, "MIC_THRESHOLD", 0.01)
+    # a quiet voice flickering between half the threshold and the threshold
+    mic = reader(*[speech()] * 3, *[quiet_voice()] * 20, *[speech()] * 3)
+
+    audio = stt._record(mic)
+
+    assert (np.abs(audio) > 0.1).sum() == 6 * stt.BLOCK  # both bursts of speech
+
+
+def test_real_silence_still_ends_the_recording(monkeypatch):
+    monkeypatch.setattr(stt.config, "MIC_THRESHOLD", 0.01)
+    mic = reader(*[speech()] * 3, *[quiet_voice(0.004)] * 20, *[speech()] * 3)
+
+    audio = stt._record(mic)
+
+    assert (
+        np.abs(audio) > 0.1
+    ).sum() == 3 * stt.BLOCK  # stopped before the second burst
+
+
+def test_a_chime_right_after_the_wake_word_cannot_end_the_recording_early():
+    # chime, then a pause longer than the end-of-speech silence, then the command
+    mic = reader(*[speech()] * 2, *[silence()] * 15, *[speech()] * 8)
+
+    audio = stt._record(mic, after_wake=True)
+
+    assert (np.abs(audio) > 0.1).sum() == (2 + 8) * stt.BLOCK  # everything is kept
+
+
+def test_speech_straight_after_the_wake_word_is_kept_from_its_first_block():
+    mic = reader(*[speech()] * 8)
+
+    audio = stt._record(mic, after_wake=True)
+
+    assert (np.abs(audio) > 0.1).sum() == 8 * stt.BLOCK  # nothing lost
+
+
+def test_a_chime_and_then_nothing_gives_no_recording():
+    mic = reader(*[speech()] * 2)
+
+    assert stt._record(mic, after_wake=True) is None
+
+
+def test_a_blip_too_short_to_be_a_command_gives_no_recording():
+    mic = reader(*[speech()] * (stt.MIN_COMMAND_BLOCKS - 1))
+
+    assert stt._record(mic, after_wake=True) is None
+
+
+def test_recording_after_the_wake_word_still_stops_after_the_silence():
+    mic = reader(*[speech()] * 8)
+
+    audio = stt._record(mic, after_wake=True)
+
+    trailing = len(audio) - 8 * stt.BLOCK
+    assert 1.0 <= trailing / stt.SAMPLE_RATE < 1.2
+
+
+def test_listen_after_the_wake_word_ignores_the_chime_and_hears_the_command(
+    monkeypatch,
+):
+    heard = []
+
+    class Whisper:
+        def transcribe(self, audio, **_):
+            heard.append(audio)
+            return iter([SimpleNamespace(text="what time is it")]), SimpleNamespace(
+                language="en", all_language_probs=[("en", 1.0)]
+            )
+
+    monkeypatch.setattr(stt, "_model", lambda: Whisper())
+    loud = np.full(stt.BLOCK, 16384, dtype=np.int16)
+    quiet = np.zeros(stt.BLOCK, dtype=np.int16)
+    stream = BlockStream(*[loud] * 2, *[quiet] * 15, *[loud] * 8)
+
+    assert stt.listen(stream, after_wake=True) == ("what time is it", "en")
+    assert (np.abs(heard[0]) > 0.1).sum() == 10 * stt.BLOCK

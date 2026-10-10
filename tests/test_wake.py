@@ -107,3 +107,16 @@ def test_the_microphone_is_released_even_when_something_fails(monkeypatch):
         pass
 
     assert FakeStream.opened[0].closed
+
+
+def test_a_given_microphone_is_used_and_left_open(monkeypatch):
+    FakeStream.opened.clear()
+    monkeypatch.setattr("sounddevice.InputStream", FakeStream)
+    monkeypatch.setattr(wake, "_new_model", lambda: FakeModel([0.0, 0.99]))
+    mine = FakeStream()
+
+    wake.wait_for_wake_word(mine)
+
+    assert mine.reads == 2
+    assert not mine.closed
+    assert FakeStream.opened == [mine]  # no second stream was opened

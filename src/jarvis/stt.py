@@ -8,13 +8,16 @@ import sys
 import numpy as np
 
 from jarvis import config
+from jarvis.mic import BLOCK, SAMPLE_RATE, open_stream
 
-SAMPLE_RATE = 16000
-BLOCK = 1280  # 80 ms of audio
 END_SILENCE_S = 1.0
 MAX_RECORD_S = 15
 MAX_WAIT_S = 6  # give up when nobody starts speaking
 PREROLL_BLOCKS = 3  # keep a little audio from before the threshold was crossed
+# After the wake word the chime and the end of "Jarvis" are loud too. A recording
+# made straight after it only counts as a command, and can only end, once this
+# much sound has been heard: those blips are 2-3 blocks, a command is far more.
+MIN_COMMAND_BLOCKS = 6  # 0.48 s
 LANGS = ("en", "id")
 
 # Whisper writes down what it expects to hear, so give it our vocabulary. This
@@ -25,20 +28,32 @@ PROMPT = (
 )
 
 
-def _record(read_block) -> np.ndarray | None:
-    """Collect audio blocks until speech has started and then ended."""
+def _record(read_block, after_wake: bool = False) -> np.ndarray | None:
+    """Collect audio blocks until speech has started and then ended.
+
+    After the wake word everything is kept from the first block, so a command
+    spoken straight after "Hey Jarvis" is whole, and the recording cannot end
+    until MIN_COMMAND_BLOCKS of sound have been heard.
+    """
     preroll = collections.deque(maxlen=PREROLL_BLOCKS)
     blocks: list[np.ndarray] = []
-    quiet_blocks = 0
+    loud_blocks = quiet_blocks = waited = 0
     # Round the waits up and the maximum down, so no limit is ever broken.
     end_blocks = math.ceil(END_SILENCE_S * SAMPLE_RATE / BLOCK)
     max_blocks = int(MAX_RECORD_S * SAMPLE_RATE / BLOCK)
     wait_blocks = math.ceil(MAX_WAIT_S * SAMPLE_RATE / BLOCK)
-    waited = 0
     while len(blocks) < max_blocks:
         block = read_block()
-        loud = float(np.sqrt(np.mean(block**2))) > config.MIC_THRESHOLD
-        if not blocks:
+        level = float(np.sqrt(np.mean(block**2)))
+        loud = level > config.MIC_THRESHOLD
+        if after_wake:
+            blocks.append(block)
+            loud_blocks += loud
+            if loud_blocks < MIN_COMMAND_BLOCKS:
+                if len(blocks) >= wait_blocks:
+                    return None  # only the chime, then nothing
+                continue
+        elif not blocks:
             if loud:
                 blocks = [*preroll, block]
             else:
@@ -47,8 +62,11 @@ def _record(read_block) -> np.ndarray | None:
                 if waited >= wait_blocks:
                     return None
             continue
-        blocks.append(block)
-        quiet_blocks = 0 if loud else quiet_blocks + 1
+        else:
+            blocks.append(block)
+        # Quiet voices flicker around the threshold, so once speech has started
+        # only half the threshold counts as silence.
+        quiet_blocks = quiet_blocks + 1 if level < config.MIC_THRESHOLD / 2 else 0
         if quiet_blocks >= end_blocks:
             break
     return np.concatenate(blocks)
@@ -111,18 +129,30 @@ def load() -> None:
     _model()
 
 
-def listen() -> tuple[str, str]:
-    """Record one spoken command from the microphone. ('', 'en') if none came."""
-    import sounddevice
+def listen(stream=None, after_wake: bool = False) -> tuple[str, str]:
+    """Record one spoken command and return (text, language); ('', 'en') if none came.
 
+    Pass the open microphone that heard the wake word, so the first words of the
+    command are not lost while a second one opens. With none given, it opens and
+    closes the microphone itself. `after_wake` says the recording follows the wake
+    word, so the chime cannot start or end it.
+    """
     model = _model()
-    with sounddevice.InputStream(
-        samplerate=SAMPLE_RATE, channels=1, dtype="float32", blocksize=BLOCK
-    ) as stream:
-        audio = _record(lambda: stream.read(BLOCK)[0][:, 0])
+    if stream is None:
+        with open_stream() as own:
+            audio = _record_from(own, after_wake)
+    else:
+        audio = _record_from(stream, after_wake)
     if audio is None:
         return "", "en"
     return transcribe(model, audio)
+
+
+def _record_from(stream, after_wake: bool = False) -> np.ndarray | None:
+    def read_block():
+        return stream.read(BLOCK)[0][:, 0].astype(np.float32) / 32768
+
+    return _record(read_block, after_wake)
 
 
 def mic_peak(seconds: float = 1.0) -> float:

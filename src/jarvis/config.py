@@ -6,8 +6,10 @@ MODEL = os.environ.get("JARVIS_MODEL", "Qwen3.5-4B-Q4_K_M")
 API_KEY = os.environ.get("JARVIS_API_KEY", "llamastash")
 VOICE = os.environ.get("JARVIS_VOICE", "M2")
 WHISPER_MODEL = os.environ.get("JARVIS_WHISPER_MODEL", "small")
-# Loudness (0-1) a block of microphone audio must pass to count as speech.
-MIC_THRESHOLD = float(os.environ.get("JARVIS_MIC_THRESHOLD", "0.01"))
+# Loudness (0-1) a block of microphone audio must pass to count as speech. This
+# room is 0.0001 when quiet, a voice at the mic peaks near 0.25, and a speaker
+# across the room reaches 0.002.
+MIC_THRESHOLD = float(os.environ.get("JARVIS_MIC_THRESHOLD", "0.003"))
 WAKE_THRESHOLD = float(os.environ.get("JARVIS_WAKE_THRESHOLD", "0.5"))
 
 # Only llama.cpp gets these; a hosted API may reject them. Temperature 0 makes

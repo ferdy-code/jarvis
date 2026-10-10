@@ -84,7 +84,8 @@ Each tool is a plain function that returns a short string for the LLM to work in
 
 ### `stt`
 
-- `listen() -> tuple[str, str]` records from the default microphone at 16 kHz mono in 80 ms blocks. Speech starts when a block's loudness passes `JARVIS_MIC_THRESHOLD` (default 0.01); it stops after 1.0 s of silence or 15 s total, and gives up if nobody speaks within 6 s. A little audio before the start is kept so the first word is not clipped. Audio is never written to disk.
+- `listen() -> tuple[str, str]` records from the default microphone at 16 kHz mono in 80 ms blocks. Speech starts when a block's loudness passes `JARVIS_MIC_THRESHOLD` (default 0.003: this PC's room is 0.0001 when quiet, a voice at the mic peaks near 0.25, a speaker across the room reaches only 0.002); it stops after 1.0 s of silence or 15 s total, and gives up if nobody speaks within 6 s. Once speech has started, only a level under half the threshold counts as silence, because quiet voices flicker around it. A little audio before the start is kept so the first word is not clipped. Audio is never written to disk.
+- `listen(stream=None, after_wake=False)` can take the microphone that heard the wake word, so there is no gap in which the first words of the command are lost (a command spoken straight after "Hey Jarvis" arrived as just "PC." when a second microphone had to be opened). With `after_wake=True` everything is kept from the first block and the recording can neither start nor end until `MIN_COMMAND_BLOCKS` (6 blocks, 0.48 s) of sound have been heard, because the chime and the end of "Jarvis" are loud blips that would otherwise start the recording and end it before the command begins.
 - Whisper runs as `small`, `int8_float16`, on the GPU (+399 MiB; float16 would need +751 MiB, and only about 900 MiB are free next to the Qwen model). It needs the CUDA 12 libraries from the `nvidia-cublas-cu12` and `nvidia-cudnn-cu12` packages, whose folders `stt` puts on `PATH` (`add_dll_directory` is not enough). If the GPU cannot be used, it prints a warning and falls back to CPU `int8`, which takes 2.7 s per phrase instead of 0.13 s. The first run ever spends about 25 s compiling kernels for the RTX 5060; later starts take 2-4 s.
 - It returns `(text, lang)` with `lang` always `en` or `id`. Short commands are often detected as Spanish or Czech, so when another language wins, `stt` takes the likelier of `en` and `id` and decodes again with that language forced.
 - Settings that mattered (46 synthetic commands plus noise): the speech filter (`vad_filter`) stops Whisper writing words for silence and room noise ("Fussball"), and the vocabulary prompt fixes "kecilkan follow" and "lock my pc" heard as "Lie". Spelling variants such as "computer" for "komputer" are left alone because the LLM understands them.
@@ -93,7 +94,7 @@ Each tool is a plain function that returns a short string for the LLM to work in
 ### `wake`
 
 - `wait_for_wake_word() -> None` streams the microphone in 80 ms chunks into openWakeWord's `hey_jarvis` model and returns when the score is ≥ 0.5 (threshold configurable).
-- It shares the microphone with `stt` one after the other, never at the same time (wake → stt → back to wake). The microphone is released when the function returns, even on an error.
+- `wait_for_wake_word(stream=None)` normally gets the open microphone from `app`, which keeps it open for the command that follows (wake → stt on the same stream). With none given it opens the microphone itself and releases it on return, even on an error. The app closes the microphone before Jarvis answers, so Jarvis does not record its own voice.
 - Every wait builds a fresh model (0.2 s). openWakeWord's `reset()` only clears the score history, not the audio buffers, so a reused model would fire again at once on the "hey jarvis" it just heard.
 - Measured on synthetic speech (Supertonic, all 10 voices): "hey jarvis" scored 0.98-1.00 in 20 of 20 tries, also when a command followed it. 4 minutes of ordinary English and Indonesian speech and 2 minutes each of room and loud noise gave no trigger (max score 0.00 and 0.01). "Hey Marvin/Google/Siri/Davis" never trigger; anything containing "Jarvis" does, and "Hey Travis" 6 times in 10. Cost is 2.3 ms per 80 ms block (about 3% of one core). Scores are close to 0 or 1, so the 0.5 threshold is not delicate. The silero noise gate (`vad_threshold`) was not needed.
 - Real-microphone numbers (4 of 5 hits, at most 1 false trigger in 30 minutes) still have to be measured with `scripts/smoke_audio.py wake`.
@@ -106,8 +107,9 @@ Each tool is a plain function that returns a short string for the LLM to work in
 - One lock around `brain.ask` + `speak`, so typed and voice turns never overlap.
 - **Language:** the model is not given a language hint (Whisper often labels two-word commands wrongly, and a wrong hint made the model answer in the wrong language); it answers in the language of the text it receives. The voice a reply is spoken in comes from the reply text (`tts.guess_lang`), for typed and voice turns alike. Whisper's language is used for one thing: the language of the spoken confirmation question.
 - **Confirm:** a typed turn asks `[y/N]` on the terminal. A voice turn speaks the question ("Do you want me to run power action restart? Say yes or no.", or the Indonesian version), then `stt.listen()` and accepts `y`/`yes`/`yeah`/`ya`/`iya` (Whisper hears a spoken "ya" as "Yeah."). Anything else, including silence, counts as no.
+- **Feedback:** after the wake word the terminal prints `(wake word heard - speak now)` and a short chime plays; the recognised command is shown as `you (voice)> ...`, and a spoken confirmation shows the question and the answer heard. "Hey Jarvis" heard again at the start of the command is removed before the brain sees it, and a command that was only the wake phrase counts as nothing heard.
 - **Echo guard:** if the wake word fires while a turn is in progress (for example Jarvis saying its own name from a typed reply), it is ignored.
-- **Start-up:** with voice on, Jarvis loads the voice (1.4 s), Whisper (2.0 s), the wake model (1.0 s) and checks the microphone for 1 s, about 6 s in all. A microphone that is silent (peak under 0.0003) gets a warning, not a shutdown.
+- **Start-up:** with voice on, Jarvis loads the voice (1.4 s), Whisper (2.0 s), the wake model (1.0 s) and checks the microphone for 1 s, about 6 s in all. Only a microphone that returns exactly zero (what a blocked microphone gives) gets a warning, not a shutdown: a quiet room is never exactly zero, but it is also only 0.0001, so a low peak says nothing.
 - **Speed (everything real except the microphone and speakers):** Jarvis starts talking 2.6-3.1 s after the end of the user's speech, which includes the 1.04 s wait to notice the speech has ended. The limit is 4 s.
 - **Graceful degradation:** if the microphone, Whisper, or the wake model fails to load, Jarvis prints a warning and runs typed-only. If TTS fails to load, it prints text only. It only exits on `exit` or Ctrl+C.
 
@@ -121,7 +123,7 @@ Plain module-level constants, read once from environment variables with defaults
 | `JARVIS_MODEL` | `Qwen3.5-4B-Q4_K_M` |
 | `JARVIS_API_KEY` | `llamastash` (stub, ignored by the loopback proxy) |
 | `JARVIS_WHISPER_MODEL` | `small` |
-| `JARVIS_MIC_THRESHOLD` | `0.01` |
+| `JARVIS_MIC_THRESHOLD` | `0.003` |
 | `JARVIS_VOICE` | `M2` |
 | `JARVIS_WAKE_THRESHOLD` | `0.5` |
 
