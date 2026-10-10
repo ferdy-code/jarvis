@@ -28,7 +28,7 @@ Plan: [plan.md](plan.md) · Spec: [SPEC.md](../SPEC.md)
 
 ---
 
-### Task 2: Typed chat end to end
+### Task 2: Typed chat end to end ✅
 **Description:** `uv run jarvis --no-voice` opens a prompt, sends what you type to the local LLM, and prints the reply. There are no tools yet. This creates `config.py`, the first version of `Brain` (system prompt, history trimmed to 20, thinking turned off on localhost, offline message), and the typed loop in `app.py`.
 
 **Acceptance criteria:**

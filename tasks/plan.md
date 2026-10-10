@@ -37,7 +37,7 @@ tools ───────┘                              │    │    │
 
 ### Phase 1: Typed Jarvis
 - [x] Task 1: Install dependencies and dev tooling (fail-fast on Python 3.14)
-- [ ] Task 2: Typed chat end to end (config + brain + app, no tools)
+- [x] Task 2: Typed chat end to end (config + brain + app, no tools)
 - [ ] Task 3: Time and battery answers (tool loop + first tools)
 - [ ] Task 4: Volume control and lock
 - [ ] Task 5: Shutdown and restart with confirmation
