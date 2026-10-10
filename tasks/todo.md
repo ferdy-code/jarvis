@@ -213,3 +213,19 @@ Plan: [plan.md](plan.md) · Spec: [SPEC.md](../SPEC.md)
 - [x] Criterion 8, with the user's real voice (reported by the user, 2026-10-10): the wake word triggered 5 of 5 times and there were no false triggers. The length of the false-trigger watch was not stated. Synthetic evidence: 20 of 20 hits across 10 voices, no false trigger in 8 minutes of speech and noise.
 - [x] SPEC Open Questions answered and SPEC updated
 - [ ] Human review
+
+---
+
+## After the MVP
+
+### Task 11: Wake the screen ✅
+**Description:** The user asked for Jarvis to log in when the PC is locked or the screen is off. After a feasibility check and a security discussion they chose to wake the screen only (see SPEC "Unlocking is out of scope"). A `wake_screen` tool moves the mouse one pixel and back.
+
+**Acceptance criteria:**
+- [x] "wake up the screen" / "nyalakan layar" (8 phrasings, both languages) calls `wake_screen`; "turn off the screen", "matikan layar" and "screen off" call nothing, and never `power`
+- [x] A display that is off comes back on: measured OFF, then ON 0.24 s after the call
+- [x] Jarvis says that a locked PC stays locked and that it cannot turn the screen off
+- [x] No regression: 0 wrong in 36 trial runs, 50/50 conversation check, 0/6 false shutdown requests
+
+**Not tested:** behaviour while the PC is actually locked (a test would lock the user out). To do later if wanted: refuse `power` while the PC is locked.
+**Files:** `src/jarvis/tools.py`, `tests/test_tools.py`, `README.md`, `SPEC.md`

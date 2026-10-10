@@ -1,3 +1,4 @@
+import ctypes
 import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -45,6 +46,24 @@ def set_volume(direction: str, step: int = 10) -> str:
     endpoint.SetMute(0, None)
     endpoint.SetMasterVolumeLevelScalar(level / 100, None)
     return f"volume {level}%"
+
+
+MOUSEEVENTF_MOVE = 0x0001
+
+
+def _nudge_mouse() -> None:
+    """Move the mouse one pixel and back: input like this wakes a display that is off."""
+    mouse_event = ctypes.windll.user32.mouse_event
+    mouse_event(MOUSEEVENTF_MOVE, 1, 0, 0, 0)
+    mouse_event(MOUSEEVENTF_MOVE, -1, 0, 0, 0)
+
+
+def wake_screen() -> str:
+    _nudge_mouse()
+    return (
+        "screen turned on. If the PC is locked, the lock screen is showing and "
+        "you need to sign in yourself."
+    )
 
 
 def lock_pc() -> str:
@@ -99,6 +118,11 @@ TOOLS: dict[str, Tool] = {
         required=["direction"],
     ),
     "lock_pc": _tool(lock_pc, "Lock the Windows screen."),
+    "wake_screen": _tool(
+        wake_screen,
+        "Turn the screen on when it is off (wake the display). It cannot turn the "
+        "screen off, and it cannot unlock a locked PC.",
+    ),
     "power": _tool(
         power,
         "Shut down or restart the PC. Only call this when the user clearly asks.",

@@ -10,6 +10,7 @@ nothing to use.
 - Answer questions and chat.
 - Tell you the date, time and battery level.
 - Change the volume (up, down, mute, unmute) and lock the screen.
+- Turn the screen on when it is off ("wake up the screen", "nyalakan layar").
 - Shut down or restart the PC, but only after you say yes.
 
 ```
@@ -108,6 +109,13 @@ OpenAI itself, and the system prompt was tuned for the small local model.
   "komputer", so Jarvis may then answer in English.
 - Answers and actions depend on a small 4B model. After a time question it may answer a
   meaningless fragment with the time again.
+- Jarvis can wake a screen that is off, but it cannot unlock a locked PC: Windows does
+  not allow a normal program to do that. You sign in yourself (PIN, Windows Hello, or
+  Windows Voice Access, which can speak your PIN on the sign-in screen). It cannot turn the
+  screen off either.
+- If the whole PC is asleep, not just the screen, Windows suspends Jarvis and it cannot hear
+  you. Untested: with the PC locked Jarvis should keep listening, which means anyone nearby
+  could talk to it, including answering yes to a shutdown question.
 - Windows only, one user, no memory between runs.
 
 ## Development

@@ -152,3 +152,23 @@ def test_power_rejects_anything_else_without_running_a_command(monkeypatch):
 def test_power_is_registered_as_dangerous_and_the_rest_are_not():
     assert tools.TOOLS["power"].dangerous is True
     assert [n for n, t in tools.TOOLS.items() if t.dangerous] == ["power"]
+
+
+def test_wake_screen_nudges_the_mouse_and_does_not_claim_to_unlock(monkeypatch):
+    nudges = []
+    monkeypatch.setattr(tools, "_nudge_mouse", lambda: nudges.append(1))
+
+    result = tools.wake_screen()
+
+    assert nudges == [1]
+    assert result.startswith("screen turned on")
+    assert "sign in yourself" in result  # a locked PC stays locked
+
+
+def test_wake_screen_is_a_safe_tool_that_says_what_it_cannot_do():
+    tool = tools.TOOLS["wake_screen"]
+    description = tool.schema["function"]["description"]
+
+    assert tool.dangerous is False
+    assert "cannot turn the screen off" in description
+    assert "cannot unlock" in description
