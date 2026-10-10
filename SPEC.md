@@ -246,6 +246,6 @@ TOOLS: dict[str, Tool] = {
 ## Open Questions
 
 1. ~~**Supertonic voice**~~ **Resolved (Task 6):** the user chose `M2` after auditioning the presets (`M1`-`M5`, `F1`-`F5`).
-2. **Whisper size:** `small` is the starting point, and it is accurate enough on clear synthetic speech (37 of 46 exact on one to three word commands; most misses are spelling variants). `medium` would not fit in the free GPU memory. Final decision after the real-microphone test in Task 7.
+2. ~~**Whisper size**~~ **Resolved (Tasks 7 and 9):** `small` stays. On the 46 synthetic commands it got 37 exactly (most misses are spelling variants), and with a person's voice at the microphone the full loop works. `medium` would not fit in the free GPU memory (about 900 MiB next to the Qwen model; `small` takes 399 MiB).
 3. ~~**Python 3.14 wheels**~~ **Resolved (Task 1):** every dependency installs and imports on Python 3.14, so no fallback is needed. `ctranslate2` sees the GPU (CUDA, float16 supported). `onnxruntime` is CPU-only, which is fine for the wake word.
-4. **Wake-word chime:** a short beep after "hey jarvis" so you know it's listening. I've assumed yes, using a generated tone with no audio file.
+4. ~~**Wake-word chime**~~ **Resolved (Task 9):** yes. A 0.12 s beep plays after the wake word, together with the line `(wake word heard - speak now)`. It is played without waiting, because the microphone stays open from the wake word to the end of the command, and a second beep before the spoken confirmation is played to the end before the microphone opens.

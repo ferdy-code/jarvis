@@ -209,6 +209,7 @@ Plan: [plan.md](plan.md) · Spec: [SPEC.md](../SPEC.md)
 ---
 
 ## Checkpoint C: MVP complete
-- [ ] All 9 SPEC success criteria pass
-- [ ] SPEC Open Questions answered and SPEC updated
+- [x] SPEC success criteria 1-7 and 9 pass (2026-10-10): clean install from a fresh clone; typed time answer 0.66-0.73 s; "kecilkan volume" 100 -> 90 in Indonesian; shutdown with "n" cancelled; brain offline message; spoken answer starts 2.5-3.0 s after the end of speech (limit 4 s, scripted microphone); Indonesian question answered in Indonesian and spoken with the Indonesian setting; 144 tests and ruff pass.
+- [ ] Criterion 8, with the user's real voice: wake word triggers in at least 4 of 5 tries, and at most 1 false trigger in 30 minutes (`uv run python scripts/smoke_audio.py wake`). Synthetic evidence so far: 20 of 20 hits across 10 voices, no false trigger in 8 minutes of speech and noise.
+- [x] SPEC Open Questions answered and SPEC updated
 - [ ] Human review
