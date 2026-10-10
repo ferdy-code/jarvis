@@ -229,3 +229,16 @@ Plan: [plan.md](plan.md) · Spec: [SPEC.md](../SPEC.md)
 
 **Not tested:** behaviour while the PC is actually locked (a test would lock the user out). To do later if wanted: refuse `power` while the PC is locked.
 **Files:** `src/jarvis/tools.py`, `tests/test_tools.py`, `README.md`, `SPEC.md`
+
+### Task 12: Open websites and search, in the Keina Nara Firefox profile ✅
+**Description:** First slice of the browser feature (`docs/ideas/jarvis-browser.md`). The user asked to "change Firefox user to Keina Nara": Firefox has six profiles, and a plain link opens in whichever answers first, so Jarvis now starts Firefox with an explicit `--profile`. New `browser.py`, tools `open_website` and `search_web`, setting `JARVIS_FIREFOX_PROFILE`.
+
+**Acceptance criteria:**
+- [x] Only `http`/`https` addresses are opened; `file:`, `javascript:`, Windows paths, `-flags`, spaces and over-long addresses are refused (24 tests)
+- [x] A profile name becomes its folder from Firefox's profile list, case-insensitively; missing or unreadable list falls back to the default browser and says so
+- [x] The real tools open a page in the Keina Nara window (verified by the window title ending "— Keina Nara")
+- [x] The model: 21/21 "open a site" with a valid address, 15/15 searches, 30/30 ordinary questions open nothing, other tools unchanged
+- [x] No regression: 0 wrong in 36 trial runs, 50/50 conversation check, 0/27 false shutdown requests and 18/18 real orders
+
+**Found on the way:** adding the two tools made the 4B model open Google for trivia and jokes (4 of 10 ordinary questions) and ask to restart the PC for "how do I restart my computer?" (3 of 3). Stricter tool descriptions fixed both; the wording is recorded in comments above them.
+**Files:** `src/jarvis/browser.py`, `src/jarvis/tools.py`, `src/jarvis/config.py`, `tests/test_browser.py`, `tests/test_tools.py`, `README.md`, `SPEC.md`

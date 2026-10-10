@@ -3,9 +3,12 @@ import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from urllib.parse import quote_plus
 
 import psutil
 from pycaw.pycaw import AudioUtilities
+
+from jarvis import browser
 
 
 @dataclass(frozen=True)
@@ -66,6 +69,20 @@ def wake_screen() -> str:
     )
 
 
+def open_website(address: str) -> str:
+    try:
+        return browser.open_url(address)
+    except ValueError as error:
+        return f"error: {error}"
+
+
+def search_web(query: str) -> str:
+    query = query.strip()
+    if not query:
+        return "error: nothing to search for"
+    return open_website("https://www.google.com/search?q=" + quote_plus(query))
+
+
 def lock_pc() -> str:
     subprocess.run(["rundll32.exe", "user32.dll,LockWorkStation"], check=True)
     return "locked"
@@ -118,6 +135,30 @@ TOOLS: dict[str, Tool] = {
         required=["direction"],
     ),
     "lock_pc": _tool(lock_pc, "Lock the Windows screen."),
+    "open_website": _tool(
+        open_website,
+        "Open a web page in the browser for the user to look at. It cannot read the page.",
+        properties={
+            "address": {
+                "type": "string",
+                "description": "Full web address, for example https://www.youtube.com",
+            }
+        },
+        required=["address"],
+    ),
+    "search_web": _tool(
+        search_web,
+        # Without the "only when asked" wording the 4B model opened Google for
+        # trivia and jokes (4 of 10 ordinary questions); with it, none.
+        "Search Google for the user by opening the results page in the browser. "
+        "Use it when the user asks to search, google or look something up online, "
+        "or asks about things you cannot know such as today's news or weather. "
+        "Questions you can answer yourself (facts, explanations, jokes, chat) get a "
+        "normal spoken answer, never a search. "
+        "It cannot read the results or answer the question.",
+        properties={"query": {"type": "string", "description": "What to search for"}},
+        required=["query"],
+    ),
     "wake_screen": _tool(
         wake_screen,
         "Turn the screen on when it is off (wake the display). It cannot turn the "
@@ -125,7 +166,12 @@ TOOLS: dict[str, Tool] = {
     ),
     "power": _tool(
         power,
-        "Shut down or restart the PC. Only call this when the user clearly asks.",
+        # "how do I restart my computer?" asked for a restart 3 times in 3 with the
+        # old text ("only when the user clearly asks"); with this wording, never.
+        "Shut down or restart the PC. Call this only when the user gives a direct "
+        "order to do it right now, such as 'shut down the PC' or 'matikan komputer'. "
+        "Never call it for questions about how to shut down or restart, explanations, "
+        "or when the user says goodnight.",
         properties={"action": {"type": "string", "enum": ["shutdown", "restart"]}},
         required=["action"],
         dangerous=True,

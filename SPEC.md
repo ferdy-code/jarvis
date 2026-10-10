@@ -42,6 +42,7 @@ It's a learning project that should also be reliable enough for daily use, so th
 | `tts` | `tts.py` | `speak(text, lang)` | — |
 | `stt` | `stt.py` | Record until silence → `(text, lang)` | — |
 | `wake` | `wake.py` | Block until "hey jarvis" is heard | — |
+| `browser` | `browser.py` | Opens web pages in a chosen Firefox profile | — |
 | `app` | `app.py` | CLI entry, wires input → brain → output | all |
 
 **Build order:** `brain` + `system-tools`, then `app` (typed chat), then `tts`, then `stt`, then `wake`.
@@ -57,6 +58,8 @@ Each tool is a plain function that returns a short string for the LLM to work in
 | `set_volume` | `direction: up\|down\|mute\|unmute`, `step: int = 10` | Changes the master volume through pycaw and returns the new level | no |
 | `lock_pc` | — | `rundll32.exe user32.dll,LockWorkStation` | no |
 | `wake_screen` | — | Moves the mouse one pixel and back (`mouse_event`), which wakes a display that is off. Measured: display OFF, then ON 0.24 s after the call. Returns a note that a locked PC stays locked | no |
+| `open_website` | `address` | Opens an `http` or `https` page in Firefox through `browser.open_url`. A bare domain such as `youtube.com` gets `https://`. It cannot read the page | no |
+| `search_web` | `query` | Opens a Google results page for the query (`https://www.google.com/search?q=...`). It cannot read the results. The description says to use it only when the user asks to search or asks about things the model cannot know (news, weather); without that wording the 4B model searched for trivia and jokes (4 of 10 ordinary questions) | no |
 | `power` | `action: shutdown\|restart` | `shutdown /s /t 5` or `shutdown /r /t 5` | **yes** |
 
 - `TOOLS: dict[str, Tool]` holds `fn`, `schema` and `dangerous`. That's the only registry, with no plugin system.
@@ -100,6 +103,13 @@ Each tool is a plain function that returns a short string for the LLM to work in
 - Measured on synthetic speech (Supertonic, all 10 voices): "hey jarvis" scored 0.98-1.00 in 20 of 20 tries, also when a command followed it. 4 minutes of ordinary English and Indonesian speech and 2 minutes each of room and loud noise gave no trigger (max score 0.00 and 0.01). "Hey Marvin/Google/Siri/Davis" never trigger; anything containing "Jarvis" does, and "Hey Travis" 6 times in 10. Cost is 2.3 ms per 80 ms block (about 3% of one core). Scores are close to 0 or 1, so the 0.5 threshold is not delicate. The silero noise gate (`vad_threshold`) was not needed.
 - Real-microphone numbers (4 of 5 hits, at most 1 false trigger in 30 minutes) still have to be measured with `scripts/smoke_audio.py wake`.
 
+### `browser`
+
+- `check_web_address(address)` is the safety rule: only `http` and `https` addresses with a host name, no spaces, no control characters and at most 2048 characters get through. `file:`, `javascript:`, `ms-settings:`, Windows paths and anything starting with `-` raise `ValueError`, whose message tells the model to give a full web address. The address is passed to Firefox as one list item, never through a shell.
+- `open_url(url)` starts `firefox.exe --profile <folder> -new-tab <url>`. Windows hands a plain link to whichever Firefox profile answers first (it was Muhammad Ferdy's one time and Keina Nara's another), so the profile is chosen explicitly. `--profile` with the running profile's folder opens a tab in its existing window (checked).
+- `profile_path(name)` finds the folder from Firefox's profile list, a SQLite database in `%APPDATA%/Mozilla/Firefox/Profile Groups` that Firefox keeps open, so a copy with its `-wal` and `-shm` files is read. The names there are the ones Firefox shows in window titles (this PC: Original profile, Muhammad Ferdy, Keina Nara, Naelya, Pewdy, Tiana). Matching ignores case. If the profile or the list is missing, the page opens in the default browser and the tool's reply says the profile was not found. An empty `JARVIS_FIREFOX_PROFILE` means the default browser.
+- `firefox_exe()` reads the path from the `App Paths` registry key and falls back to `C:/Program Files/Mozilla Firefox/firefox.exe`.
+
 ### `app`
 
 - `uv run jarvis` starts typed input plus voice. `uv run jarvis --no-voice` starts typed input only.
@@ -127,6 +137,7 @@ Plain module-level constants, read once from environment variables with defaults
 | `JARVIS_MIC_THRESHOLD` | `0.003` |
 | `JARVIS_VOICE` | `M2` |
 | `JARVIS_WAKE_THRESHOLD` | `0.5` |
+| `JARVIS_FIREFOX_PROFILE` | `Keina Nara` |
 
 Switching to OpenAI means setting `JARVIS_BASE_URL=https://api.openai.com/v1`, `JARVIS_MODEL=<model>` and `JARVIS_API_KEY=<key>`, with no code changes. `enable_thinking` is sent only when the base URL is local.
 

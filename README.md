@@ -11,6 +11,7 @@ nothing to use.
 - Tell you the date, time and battery level.
 - Change the volume (up, down, mute, unmute) and lock the screen.
 - Turn the screen on when it is off ("wake up the screen", "nyalakan layar").
+- Open a web page ("open YouTube", "buka github.com") or search Google ("search for nasi goreng recipes") in Firefox. Only `http` and `https` pages are opened, and Jarvis does not read them.
 - Shut down or restart the PC, but only after you say yes.
 
 ```
@@ -74,6 +75,7 @@ All settings are environment variables, and all are optional. In PowerShell:
 | `JARVIS_WHISPER_MODEL` | `small` | Speech-recognition model size |
 | `JARVIS_MIC_THRESHOLD` | `0.003` | Loudness that counts as speech (0 to 1) |
 | `JARVIS_WAKE_THRESHOLD` | `0.5` | How sure the wake word must be (0 to 1) |
+| `JARVIS_FIREFOX_PROFILE` | `Keina Nara` | Firefox profile that pages open in, by the name Firefox shows. Empty means the default browser |
 
 To use OpenAI instead of the local model, set `JARVIS_BASE_URL=https://api.openai.com/v1`,
 `JARVIS_MODEL` and `JARVIS_API_KEY`. For a non-local address Jarvis stops sending the

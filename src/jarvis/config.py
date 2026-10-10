@@ -11,6 +11,9 @@ WHISPER_MODEL = os.environ.get("JARVIS_WHISPER_MODEL", "small")
 # across the room reaches 0.002.
 MIC_THRESHOLD = float(os.environ.get("JARVIS_MIC_THRESHOLD", "0.003"))
 WAKE_THRESHOLD = float(os.environ.get("JARVIS_WAKE_THRESHOLD", "0.5"))
+# Pages open in this Firefox profile (the name Firefox shows). Without it, Windows
+# hands a link to whichever profile answers first, which changes from one time to the next.
+FIREFOX_PROFILE = os.environ.get("JARVIS_FIREFOX_PROFILE", "Keina Nara")
 
 # Only llama.cpp gets these; a hosted API may reject them. Temperature 0 makes
 # tool choice repeatable: at 0.7 the model sometimes asked to shut the PC down

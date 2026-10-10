@@ -69,6 +69,12 @@ and it keeps every existing guarantee. B builds on it once A is in daily use.
 **Out:** reading pages aloud, the web answers of Phase B, and anything that needs the user's
 accounts.
 
+## Progress
+
+- **Firefox profile decided (2026-10-10): Keina Nara.** Jarvis opens everything in that profile (`JARVIS_FIREFOX_PROFILE`). The music plays there. The autoplay permission must be set in that profile.
+- **Done: `open_website` and `search_web`**, plus the profile targeting. Checked with the real Firefox: the page opened in the Keina Nara window. Model sampling: 21/21 site requests with valid addresses, 15/15 searches, 30/30 ordinary questions opened nothing, and the other tools were unchanged.
+- **Next:** `play_youtube_music(query)` (needs the autoplay permission for `music.youtube.com` in the Keina Nara profile) and `browser_control` (media keys confirmed: pause and resume in 0.2 s; scroll with Page Down).
+
 ## Not Doing (and Why)
 
 - **Browser agent (forms, buying, clicking):** a 4B model would fail too often, and the
