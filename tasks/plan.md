@@ -43,7 +43,7 @@ tools ───────┘                              │    │    │
 - [x] Task 5: Shutdown and restart with confirmation
 
 ### Checkpoint A: Typed Jarvis is usable every day
-- [ ] SPEC success criteria 1–5 and 9 pass
+- [x] SPEC success criteria 1–5 and 9 pass
 - [ ] Human review
 
 ### Phase 2: Speaking Jarvis

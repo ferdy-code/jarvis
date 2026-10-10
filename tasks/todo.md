@@ -103,8 +103,8 @@ Plan: [plan.md](plan.md) · Spec: [SPEC.md](../SPEC.md)
 ---
 
 ## Checkpoint A: Typed Jarvis is usable every day
-- [ ] SPEC success criteria 1, 2, 3, 4, 5 and 9 pass
-- [ ] Try the 4B model on 10 mixed EN/ID commands. If it picks the wrong tool more than once, try `Qwen3-8B`
+- [x] SPEC success criteria 1, 2, 3, 4, 5 and 9 pass (2026-10-10; #5 tested with a dead port, not by stopping LlamaStash)
+- [x] 12 mixed EN/ID commands x3 plus 2 follow-ups on the 4B model: 0 wrong first calls in 36 runs, so no need for Qwen3-8B
 - [ ] Human review before voice work
 
 ---
