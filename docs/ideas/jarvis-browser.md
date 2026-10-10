@@ -29,7 +29,9 @@ and it keeps every existing guarantee. B builds on it once A is in daily use.
 
 ## Key Assumptions to Validate (before writing feature code)
 
-- [ ] **Autoplay: BLOCKED, second test also blocked** (tested 2026-10-10 twice). The second
+- [ ] **Autoplay: BLOCKED, three tests** (2026-10-10; the third was after the user said it was
+  allowed: silent for 25 s, and none of the six Firefox profiles has an autoplay permission
+  row or a `media.autoplay.*` preference saved, so the change never reached Firefox's files). The second
   test used `browser.open_url` into the Keina Nara profile after the user said autoplay was
   allowed: silent for 25 s, and that profile had no autoplay permission row and no
   `media.autoplay.*` preference saved. The Autoplay > Settings dialog may only set the
