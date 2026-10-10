@@ -2,7 +2,7 @@ import argparse
 
 import openai
 
-from jarvis import config
+from jarvis import config, tts
 from jarvis.brain import Brain
 from jarvis.tools import TOOLS
 
@@ -19,14 +19,32 @@ def confirm_in_terminal(question: str) -> bool:
     return is_yes(input(f"jarvis> Run {question}? [y/N] "))
 
 
+def load_voice() -> bool:
+    try:
+        tts.load()
+    except Exception as error:  # noqa: BLE001 - any voice problem means text only
+        print(f"Voice is off ({error}). Replies will be text only.")
+        return False
+    return True
+
+
+def speak_reply(reply: str) -> bool:
+    try:
+        tts.speak(reply, tts.guess_lang(reply))
+    except Exception as error:  # noqa: BLE001 - audio trouble must not end the chat
+        print(f"(voice stopped: {error})")
+        return False
+    return True
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="jarvis", description="Local assistant.")
     parser.add_argument(
         "--no-voice",
         action="store_true",
-        help="typed input only (voice is not built yet, so this is the only mode)",
+        help="print replies only, do not speak them",
     )
-    parser.parse_args()
+    args = parser.parse_args()
 
     client = openai.OpenAI(
         base_url=config.BASE_URL,
@@ -41,6 +59,8 @@ def main() -> None:
         extra_body=config.EXTRA_BODY,
     )
 
+    voice_on = False if args.no_voice else load_voice()
+
     print("Jarvis is ready. Type 'exit' to quit.")
     try:
         while True:
@@ -48,6 +68,9 @@ def main() -> None:
             if text.lower() in EXIT_WORDS:
                 break
             if text:
-                print(f"jarvis> {brain.ask(text)}")
+                reply = brain.ask(text)
+                print(f"jarvis> {reply}")
+                if voice_on:
+                    voice_on = speak_reply(reply)
     except EOFError, KeyboardInterrupt:
         print()

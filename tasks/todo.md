@@ -111,7 +111,7 @@ Plan: [plan.md](plan.md) · Spec: [SPEC.md](../SPEC.md)
 
 ## Phase 2: Speaking Jarvis
 
-### Task 6: Spoken replies with Supertonic 3
+### Task 6: Spoken replies with Supertonic 3 ✅ (code done; the listening check and voice choice are left to the user)
 **Description:** `tts.speak(text, lang)` loads Supertonic once, synthesizes speech in `en` or `id`, and plays it with sounddevice. `app` speaks every reply in voice mode, uses the last-known language for typed turns, and falls back to text only if TTS fails to load. List the available voice presets and pick one with the user.
 
 **Acceptance criteria:**
@@ -150,6 +150,7 @@ Plan: [plan.md](plan.md) · Spec: [SPEC.md](../SPEC.md)
 - [ ] `nvidia-smi` while Qwen and Whisper are both loaded: VRAM fits
 
 **Dependencies:** Task 1
+**Known problem (found in Task 6):** `WhisperModel(device="cuda")` loads but the first transcription fails with `Library cublas64_12.dll is not found`. Fix by installing the CUDA 12 runtime libraries (`nvidia-cublas-cu12`, maybe `nvidia-cudnn-cu12`) and making their DLLs findable, or use CPU `int8` (small: about 1-2 s per short clip; measure it). Also confirm the RTX 5060 is supported by ctranslate2's CUDA build.
 **Files:** `src/jarvis/stt.py`, `scripts/smoke_audio.py`
 **Scope:** S
 

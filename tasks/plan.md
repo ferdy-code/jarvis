@@ -47,7 +47,7 @@ tools ───────┘                              │    │    │
 - [ ] Human review
 
 ### Phase 2: Speaking Jarvis
-- [ ] Task 6: Spoken replies with Supertonic 3 (en + id)
+- [x] Task 6: Spoken replies with Supertonic 3 (en + id)
 
 ### Checkpoint B: Jarvis talks
 - [ ] Typed questions get spoken answers in the right language; `--no-voice` still works

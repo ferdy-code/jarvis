@@ -78,7 +78,9 @@ Each tool is a plain function that returns a short string for the LLM to work in
 
 - `speak(text: str, lang: str) -> None` uses Supertonic `TTS(auto_download=True)` with a preset voice (default `M1`, configurable), and plays the audio through `sounddevice`. It blocks until playback finishes.
 - `lang` must be `en` or `id`. Anything else falls back to `en`.
-- The model is loaded once and stays in memory.
+- The model is loaded once and stays in memory. Voices: `M1`-`M5`, `F1`-`F5`; output is 44.1 kHz. First run downloads about 385 MB to `~/.cache/supertonic3`.
+- For `id`, numbers are spelled out as Indonesian words before synthesis (`spell_numbers_id`). Supertonic misreads Indonesian digits ("85 persen" was heard as "25%", "18:15" as "12.15"); written as words they were heard correctly 8 times out of 8. English digits are read fine.
+- `guess_lang(reply)` picks `en` or `id` for typed turns by counting function words in the reply. Voice turns will use the language Whisper detected.
 
 ### `stt`
 
