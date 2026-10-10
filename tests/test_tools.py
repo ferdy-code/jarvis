@@ -40,3 +40,89 @@ def test_registry_has_a_schema_named_after_each_tool():
     for name, entry in tools.TOOLS.items():
         assert entry.schema["function"]["name"] == name
         assert entry.schema["function"]["description"]
+
+
+class FakeEndpoint:
+    """Stands in for pycaw's IAudioEndpointVolume."""
+
+    def __init__(self, percent=50, muted=False):
+        self.scalar = percent / 100
+        self.muted = muted
+
+    def GetMasterVolumeLevelScalar(self):
+        return self.scalar
+
+    def SetMasterVolumeLevelScalar(self, scalar, _context):
+        self.scalar = scalar
+
+    def SetMute(self, muted, _context):
+        self.muted = bool(muted)
+
+
+def fake_volume(monkeypatch, **kwargs):
+    endpoint = FakeEndpoint(**kwargs)
+    monkeypatch.setattr(tools, "_endpoint", lambda: endpoint)
+    return endpoint
+
+
+def test_volume_up_and_down_move_by_the_step(monkeypatch):
+    endpoint = fake_volume(monkeypatch, percent=50)
+
+    assert tools.set_volume("up") == "volume 60%"
+    assert tools.set_volume("down", step=25) == "volume 35%"
+    assert endpoint.scalar == 0.35
+
+
+def test_volume_stays_between_0_and_100(monkeypatch):
+    fake_volume(monkeypatch, percent=95)
+    assert tools.set_volume("up") == "volume 100%"
+
+    fake_volume(monkeypatch, percent=5)
+    assert tools.set_volume("down") == "volume 0%"
+
+
+def test_volume_up_unmutes(monkeypatch):
+    endpoint = fake_volume(monkeypatch, percent=50, muted=True)
+
+    tools.set_volume("up")
+
+    assert endpoint.muted is False
+
+
+def test_mute_and_unmute_keep_the_level(monkeypatch):
+    endpoint = fake_volume(monkeypatch, percent=40)
+
+    assert tools.set_volume("mute") == "muted"
+    assert endpoint.muted is True
+    assert tools.set_volume("unmute") == "unmuted, volume 40%"
+    assert endpoint.muted is False
+    assert endpoint.scalar == 0.4
+
+
+def test_volume_rejects_an_unknown_direction(monkeypatch):
+    endpoint = fake_volume(monkeypatch, percent=50)
+
+    result = tools.set_volume("sideways")
+
+    assert result.startswith("error:")
+    assert endpoint.scalar == 0.5
+
+
+def test_lock_pc_asks_windows_to_lock(monkeypatch):
+    commands = []
+    monkeypatch.setattr(tools.subprocess, "run", lambda cmd, **_: commands.append(cmd))
+
+    assert tools.lock_pc() == "locked"
+    assert commands == [["rundll32.exe", "user32.dll,LockWorkStation"]]
+
+
+def test_volume_schema_lists_the_directions():
+    schema = tools.TOOLS["set_volume"].schema["function"]["parameters"]
+
+    assert schema["properties"]["direction"]["enum"] == [
+        "up",
+        "down",
+        "mute",
+        "unmute",
+    ]
+    assert schema["required"] == ["direction"]

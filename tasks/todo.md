@@ -65,7 +65,7 @@ Plan: [plan.md](plan.md) · Spec: [SPEC.md](../SPEC.md)
 
 ---
 
-### Task 4: Volume control and lock
+### Task 4: Volume control and lock ✅
 **Description:** Add `set_volume(direction, step=10)` using pycaw (returns the new level) and `lock_pc()`. Both are non-dangerous tools.
 
 **Acceptance criteria:**
