@@ -3,10 +3,11 @@ from collections.abc import Callable
 
 import openai
 
+from jarvis.language import detect_language
 from jarvis.tools import Tool
 
 OFFLINE_MESSAGE = "My brain is offline. Is LlamaStash running?"
-MAX_HISTORY = 20
+MAX_TURNS = 10
 MAX_TOOL_ROUNDS = 3
 
 # Wording matters: with thinking off, a prompt that only asks for short answers
@@ -22,6 +23,8 @@ MAX_TOOL_ROUNDS = 3
 # with it, 0 of 27 question phrasings, and all 18 real orders still work. Keep the
 # language sentence LAST: with the how-to sentence after it, the reply language was
 # wrong 6 of 75 times in the long conversations; this order gives 75 of 75.
+# "I'm tired, goodnight" asked for a shutdown 3 times in 3 (with ten tools); the
+# greeting sentence brings 42 question/goodbye phrasings to 0 false requests.
 SYSTEM_PROMPT = (
     "You are Jarvis, a voice assistant on the user's PC. You cannot know the "
     "current date, time or battery level yourself: always call the matching "
@@ -34,11 +37,18 @@ SYSTEM_PROMPT = (
     "the tool again, even if you already answered such a question earlier in "
     "this conversation. When the user asks how to do something, or what "
     "something is, answer in words; only take an action when the user tells you "
-    "to do it. Always reply in the language of the user's latest message, not "
-    "the language of earlier messages."
+    "to do it. A greeting, goodnight or thank you is not a command: answer it in "
+    "words. Always reply in the language of the user's latest message, not the "
+    "language of earlier messages."
 )
 
 LANGUAGE_NAMES = {"en": "English", "id": "Indonesian"}
+
+# A clock or battery reading is out of date as soon as it is spoken, so a turn that
+# used one is not remembered. Kept in the history, the model copied its old answer
+# (in its old language) instead of asking the clock again: the stale time and the
+# wrong-language reply that no amount of prompt wording fixed for good.
+FORGOTTEN_TOOLS = {"get_datetime", "get_battery"}
 
 
 class Brain:
@@ -56,22 +66,29 @@ class Brain:
         # Asked before any dangerous tool runs. With no way to ask, those never run.
         self.confirm = confirm
         self.extra_body = extra_body
-        # Only user and assistant text is remembered between turns. Tool calls
-        # live in the per-turn message list, so trimming can never split a
-        # tool call from its result.
-        self.history: list[dict] = []
+        # Each past turn is kept whole: the question, any tool calls and their results,
+        # and the reply. With only the reply text remembered, the model never saw itself
+        # call a tool and began answering "Musik sudah dipause" without calling one.
+        # Whole turns are trimmed together, so a tool call is never cut from its result.
+        self.history: list[list[dict]] = []
 
     def ask(self, text: str, lang: str | None = None) -> str:
-        self.history.append({"role": "user", "content": text})
-        self.history = self.history[-MAX_HISTORY:]
+        # Told to the model outright when the words make it clear: with only the
+        # prompt's instruction, an English tool result ("Saturday, October 10") pulled
+        # the reply into English after an Indonesian question (6 of 75 chats).
+        lang = lang or detect_language(text)
         messages = [{"role": "system", "content": _system_prompt(lang)}]
-        messages += self.history
+        for turn in self.history:
+            messages += turn
+        start = len(messages)
+        messages.append({"role": "user", "content": text})
         try:
             reply = self._converse(messages)
         except openai.APIConnectionError:
-            self.history.pop()
             return OFFLINE_MESSAGE
-        self.history.append({"role": "assistant", "content": reply})
+        turn = [*messages[start:], {"role": "assistant", "content": reply}]
+        if not _tools_used(turn) & FORGOTTEN_TOOLS:
+            self.history = [*self.history, turn][-MAX_TURNS:]
         return reply
 
     def _converse(self, messages: list[dict]) -> str:
@@ -119,6 +136,15 @@ class Brain:
             return False
         details = ", ".join(f"{key}={value}" for key, value in arguments.items())
         return self.confirm(f"{name}({details})")
+
+
+def _tools_used(messages: list[dict]) -> set[str]:
+    """The names of the tools called in this turn's messages."""
+    return {
+        call["function"]["name"]
+        for message in messages
+        for call in message.get("tool_calls", [])
+    }
 
 
 def _assistant_message(message) -> dict:

@@ -156,7 +156,7 @@ def test_power_is_registered_as_dangerous_and_the_rest_are_not():
 
 def test_wake_screen_nudges_the_mouse_and_does_not_claim_to_unlock(monkeypatch):
     nudges = []
-    monkeypatch.setattr(tools, "_nudge_mouse", lambda: nudges.append(1))
+    monkeypatch.setattr(tools.browser, "nudge_mouse", lambda: nudges.append(1))
 
     result = tools.wake_screen()
 

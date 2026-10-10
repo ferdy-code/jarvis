@@ -103,7 +103,8 @@ def passed(check, reply) -> bool:
     if check == "tool":
         return "get_datetime" in tool_calls
     if check == "time":
-        return f"18:{minute}" in reply
+        # the clock must really have been read: a copied answer can look fresh
+        return "get_datetime" in tool_calls and f"18:{minute}" in reply
     return True
 
 

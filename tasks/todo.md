@@ -256,3 +256,21 @@ Plan: [plan.md](plan.md) · Spec: [SPEC.md](../SPEC.md)
 **Found on the way:** the new tool again pushed "how do I restart my computer?" into a restart request (3 of 3). A system-prompt sentence (questions get answers, only orders get actions) fixed it for every tool, but placed after the language sentence it broke the reply language (6 of 75 wrong); placed before it, 75/75.
 **Not done:** the spoken reply overlaps the first seconds of the song; tabs pile up (one per song).
 **Files:** `src/jarvis/music.py`, `src/jarvis/browser.py`, `src/jarvis/tools.py`, `src/jarvis/brain.py`, `tests/test_music.py`, `README.md`, `SPEC.md`
+
+### Task 14: Voice remote (pause, resume, next, previous, scroll) and a sturdier conversation memory ✅
+**Description:** `browser_control` tool, and the changes to `Brain` that real runs forced.
+
+**Acceptance criteria:**
+- [x] Pause, resume, next and previous work on real Firefox: pause 1.6 s, resume 1.0 s, `next` changed the song ("Hati-Hati di Jalan" to "Monokrom"), `previous` returned. A second "pause" says "nothing is playing" and does not start music; a second "resume" says "already playing" and does not pause
+- [x] Scrolling works every time on a verified test page (913, 1826, 2739, 1826, 913, 1826) and gives the focus back
+- [x] The exact typed sequence that failed (play, next, previous, next, pause, resume, pause, pause) ends with the music paused, twice, and every command that needed a tool called one
+- [x] Model: 96/96 remote phrasings; a music phrase never asks to shut down the PC; ordinary questions 42/42 open or run nothing
+- [x] No regression: 0 wrong of 36 trial runs, three conversation rounds of 75/75 data and 75/75 language, 0/42 false shutdown requests with 18/18 real orders (243 tests)
+
+**Found on the way (each by a real run, not by the unit tests):**
+1. Tapping Alt to bring Firefox forward toggled its menu bar, so every second scroll vanished. Fixed with the one-pixel mouse nudge.
+2. The sound level blinks to silence while a song loads, so "previous" was refused after "next". `is_playing` now uses Windows' stream state, which drops the instant the music is paused and stays on through a song change; `next`/`previous` no longer check first, and `pause` waits 1.5 s.
+3. The model said "Musik sudah dipause" without calling any tool (the music kept playing) because its history held only its own earlier claims. The history now keeps whole turns with their tool calls: 9 of 9 sequences ended correctly instead of 0 of 3.
+4. The reply language and a copied old time came back whenever a tool was added. The user's language is now told to the model when clear (`language.py`), and clock/battery turns are forgotten.
+5. Each new tool shifted older behaviour ("how do I restart my computer?", "goodnight" asking for a shutdown). Two prompt sentences fixed them; their order matters (language last).
+**Files:** `src/jarvis/brain.py`, `src/jarvis/browser.py`, `src/jarvis/tools.py`, `src/jarvis/language.py`, `src/jarvis/tts.py`, `tests/test_remote.py`, `tests/test_language.py`, `tests/test_brain.py`, `README.md`, `SPEC.md`

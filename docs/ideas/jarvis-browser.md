@@ -76,7 +76,8 @@ accounts.
 - **Firefox profile decided (2026-10-10): Keina Nara.** Jarvis opens everything in that profile (`JARVIS_FIREFOX_PROFILE`). The music plays there. The autoplay permission must be set in that profile.
 - **Done: `open_website` and `search_web`**, plus the profile targeting. Checked with the real Firefox: the page opened in the Keina Nara window. Model sampling: 21/21 site requests with valid addresses, 15/15 searches, 30/30 ordinary questions opened nothing, and the other tools were unchanged.
 - **Done: `play_music(query)`** (2026-10-10). Real run: `playing 'Hati-Hati di Jalan' by Tulus` in 4.7 s; a second request paused it and played `Yellow` (tab title "Yellow | YouTube Music"). Model: 21/21 phrasings with clean queries.
-- **Next:** `browser_control` (pause, resume, next, previous with the media keys, confirmed for pause and resume; scroll with Page Down).
+- **Done: `browser_control`** (2026-10-10): pause, resume, next, previous with the media keys, and scroll with Page Down/Up. Real Firefox: all worked, `next` changed the song, six scrolls in a row. Model: 96/96 phrasings, and "matikan musik" never asks to shut the PC down.
+- **Phase A is complete.** Phase B (spoken web answers, with the web-reading step given no tools) is not started and needs the open questions answered first (search source).
 
 ## Not Doing (and Why)
 

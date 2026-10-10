@@ -2,31 +2,14 @@ import functools
 import re
 
 from jarvis import config
+from jarvis.language import detect_language
 
 SUPPORTED_LANGS = {"en", "id"}
 
-# Function words that are unmistakable in one language. Replies are always
-# English or Indonesian, and a reply has several of these.
-INDONESIAN_WORDS = {
-    "yang", "dan", "di", "ke", "dari", "dengan", "untuk", "ini", "itu", "adalah",
-    "sudah", "telah", "akan", "saya", "anda", "kamu", "tidak", "bisa", "ada",
-    "jam", "sekarang", "hari", "suara", "layar", "halo", "terima", "kasih",
-    "kenapa", "karena", "bagaimana", "apa", "atau", "pada", "menjadi", "oleh",
-    "sedang", "lagi", "pukul", "kabar", "kabarmu", "naik", "atas",
-}  # fmt: skip
-ENGLISH_WORDS = {
-    "the", "is", "are", "it", "a", "an", "to", "of", "and", "you", "your", "i",
-    "this", "that", "not", "has", "have", "was", "now", "at", "in", "on", "for",
-    "with", "can", "will", "how", "what", "hello", "functions", "because",
-}  # fmt: skip
-
 
 def guess_lang(text: str) -> str:
-    """'id' if the text has more Indonesian than English function words."""
-    words = re.findall(r"[a-z]+", text.lower())
-    indonesian = sum(word in INDONESIAN_WORDS for word in words)
-    english = sum(word in ENGLISH_WORDS for word in words)
-    return "id" if indonesian > english else "en"
+    """The voice language for a reply: 'id' if it is clearly Indonesian, else 'en'."""
+    return detect_language(text) or "en"
 
 
 ONES = ["nol", "satu", "dua", "tiga", "empat", "lima", "enam", "tujuh", "delapan", "sembilan"]  # fmt: skip

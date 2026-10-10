@@ -1,4 +1,3 @@
-import ctypes
 import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -51,18 +50,8 @@ def set_volume(direction: str, step: int = 10) -> str:
     return f"volume {level}%"
 
 
-MOUSEEVENTF_MOVE = 0x0001
-
-
-def _nudge_mouse() -> None:
-    """Move the mouse one pixel and back: input like this wakes a display that is off."""
-    mouse_event = ctypes.windll.user32.mouse_event
-    mouse_event(MOUSEEVENTF_MOVE, 1, 0, 0, 0)
-    mouse_event(MOUSEEVENTF_MOVE, -1, 0, 0, 0)
-
-
 def wake_screen() -> str:
-    _nudge_mouse()
+    browser.nudge_mouse()
     return (
         "screen turned on. If the PC is locked, the lock screen is showing and "
         "you need to sign in yourself."
@@ -97,12 +86,42 @@ def play_music(query: str) -> str:
     opened = open_website(song.url)
     if opened.startswith("error"):
         return opened
-    if browser.wait_for_sound(True, 8):
+    if browser.wait_for_playing(True, 8):
         return f"playing '{song.title}' by {song.artist}"
     return (
         f"opened '{song.title}' by {song.artist}, but no sound started within 8 seconds; "
         "Firefox may be blocking autoplay for music.youtube.com"
     )
+
+
+def browser_control(action: str) -> str:
+    """Pause, resume, skip and scroll. Play/Pause is a toggle, so "pause" must never
+    start music and "resume" must never pause it: they check the playing state first."""
+    if action == "pause":
+        # a song change makes the state blink off for a moment, so give it time to return
+        if not browser.wait_for_playing(True, 1.5):
+            return "nothing is playing"
+        browser.press_media_key("play_pause")
+        return (
+            "paused"
+            if browser.wait_for_playing(False, 3)
+            else "error: the music did not pause"
+        )
+    if action == "resume":
+        if browser.is_playing():
+            return "already playing"
+        browser.press_media_key("play_pause")
+        if browser.wait_for_playing(True, 3):
+            return "resumed"
+        return "error: nothing resumed; there may be no paused music"
+    if action in ("next", "previous"):
+        browser.press_media_key(action)  # not a toggle, so no need to check first
+        if browser.wait_for_playing(True, 5):
+            return f"skipped to the {action} song"
+        return "error: nothing is playing; there may be no music to skip"
+    if action in ("scroll_down", "scroll_up"):
+        return browser.scroll(action.removeprefix("scroll_"))
+    return f"error: unknown action {action!r}"
 
 
 def lock_pc() -> str:
@@ -180,6 +199,28 @@ TOOLS: dict[str, Tool] = {
             }
         },
         required=["query"],
+    ),
+    "browser_control": _tool(
+        browser_control,
+        "Remote control for the music and the browser: pause or resume the music, "
+        "skip to the next or previous song, or scroll the page down or up. "
+        "'Stop the music' and 'matikan musik' mean pause. "
+        "'Skip this song', 'ganti lagu' and 'lagu berikutnya' mean next. "
+        "'Lagu sebelumnya' and 'go back one song' mean previous.",
+        properties={
+            "action": {
+                "type": "string",
+                "enum": [
+                    "pause",
+                    "resume",
+                    "next",
+                    "previous",
+                    "scroll_down",
+                    "scroll_up",
+                ],
+            }
+        },
+        required=["action"],
     ),
     "search_web": _tool(
         search_web,

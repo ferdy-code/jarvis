@@ -42,7 +42,8 @@ It's a learning project that should also be reliable enough for daily use, so th
 | `tts` | `tts.py` | `speak(text, lang)` | — |
 | `stt` | `stt.py` | Record until silence → `(text, lang)` | — |
 | `wake` | `wake.py` | Block until "hey jarvis" is heard | — |
-| `browser` | `browser.py` | Opens web pages in a chosen Firefox profile; reads Firefox's sound level; presses media keys | — |
+| `language` | `language.py` | Tells English from Indonesian by function words; None when unsure | — |
+| `browser` | `browser.py` | Opens web pages in a chosen Firefox profile; says whether Firefox is playing; presses media keys; scrolls | — |
 | `music` | `music.py` | Finds a song on YouTube Music (`ytmusicapi`) | — |
 | `app` | `app.py` | CLI entry, wires input → brain → output | all |
 
@@ -61,7 +62,8 @@ Each tool is a plain function that returns a short string for the LLM to work in
 | `wake_screen` | — | Moves the mouse one pixel and back (`mouse_event`), which wakes a display that is off. Measured: display OFF, then ON 0.24 s after the call. Returns a note that a locked PC stays locked | no |
 | `open_website` | `address` | Opens an `http` or `https` page in Firefox through `browser.open_url`. A bare domain such as `youtube.com` gets `https://`. It cannot read the page | no |
 | `search_web` | `query` | Opens a Google results page for the query (`https://www.google.com/search?q=...`). It cannot read the results. The description says to use it only when the user asks to search or asks about things the model cannot know (news, weather); without that wording the 4B model searched for trivia and jokes (4 of 10 ordinary questions) | no |
-| `play_music` | `query` | Finds the best matching song with `ytmusicapi`, pauses whatever Firefox is playing (only if sound is coming out, because Play/Pause is a toggle), opens `music.youtube.com/watch?v=ID` in the Keina Nara profile, then waits up to 8 s for Firefox's audio meter to show sound. Replies `playing 'Title' by Artist`, or says no sound started and autoplay may be blocked, so it never claims success on a silent page. Measured: 3.7-4.7 s, the old song paused before the new one, the tab title became the song's | no |
+| `play_music` | `query` | Finds the best matching song with `ytmusicapi`, pauses whatever Firefox is playing (only if it is playing, because Play/Pause is a toggle), opens `music.youtube.com/watch?v=ID` in the Keina Nara profile, then waits up to 8 s for Firefox to start playing. Replies `playing 'Title' by Artist`, or says no sound started and autoplay may be blocked, so it never claims success on a silent page. Measured: 3.7-4.7 s, the old song paused before the new one, the tab title became the song's | no |
+| `browser_control` | `action`: `pause`, `resume`, `next`, `previous`, `scroll_down`, `scroll_up` | `pause` and `resume` check the playing state first (Play/Pause is a toggle: "pause" must never start music, "resume" must never pause it) and report what really happened. `pause` waits up to 1.5 s for the state to be "playing" before answering "nothing is playing". `next` and `previous` press the media key (no toggle, so no check) and confirm music plays within 5 s. Scrolling sends Page Down or Page Up to the Keina Nara window, only after verifying that window is in front, then gives the focus back. Measured on real Firefox: pause 1.6 s, resume 1.0 s, `next` changed "Hati-Hati di Jalan" to "Monokrom" and `previous` returned | no |
 | `power` | `action: shutdown\|restart` | `shutdown /s /t 5` or `shutdown /r /t 5` | **yes** |
 
 - `TOOLS: dict[str, Tool]` holds `fn`, `schema` and `dangerous`. That's the only registry, with no plugin system.
@@ -77,7 +79,10 @@ Each tool is a plain function that returns a short string for the LLM to work in
   4. Appends the results and calls the LLM again.
   5. Stops at a text reply, or after 3 rounds of tool calls.
 - System prompt: you are Jarvis, keep replies short (1–3 sentences, because they're spoken), answer in the user's language (`lang` hint provided), use tools for time, battery, volume, lock and power, and never pretend to have done an action you didn't run.
-- History is in memory only, trimmed to the last 20 messages, and lost on exit.
+- History is in memory only and lost on exit. It is a list of whole turns (the question, any tool calls with their results, and the reply), trimmed to the last 10 turns together, so a tool call is never cut from its result. Why whole turns: with only the reply text kept, the model never saw itself call a tool and, in a longer chat, answered "Musik sudah dipause" without calling one (the music kept playing). With tool calls kept, 9 of 9 music sequences ended correctly; with text only, 0 of 3.
+- Turns that read the clock or battery (`FORGOTTEN_TOOLS`) are not remembered at all: a reading is out of date once spoken, and the model copied its old answer, in the old language, instead of asking again.
+- The reply language is told to the model when `detect_language` (the shared function-word lists in `language.py`) is sure about the user's words ("The user is speaking Indonesian"); short commands such as "kecilkan volume" get no hint. A `lang` given by the caller wins.
+- Prompt wording that matters, each found by a failing check: how-to questions get answers and only orders get actions; a greeting, goodnight or thank you is not a command; and the language sentence must stay last (with the how-to sentence after it the reply language was wrong 6 of 75 times). Adding a tool can shift all of this, so run the suites listed under Testing Strategy after every new tool.
 - If the LLM server can't be reached, it returns the message "My brain is offline. Is LlamaStash running?" and doesn't crash.
 
 ### `tts`
@@ -111,6 +116,12 @@ Each tool is a plain function that returns a short string for the LLM to work in
 - `open_url(url)` starts `firefox.exe --profile <folder> -new-tab <url>`. Windows hands a plain link to whichever Firefox profile answers first (it was Muhammad Ferdy's one time and Keina Nara's another), so the profile is chosen explicitly. `--profile` with the running profile's folder opens a tab in its existing window (checked).
 - `profile_path(name)` finds the folder from Firefox's profile list, a SQLite database in `%APPDATA%/Mozilla/Firefox/Profile Groups` that Firefox keeps open, so a copy with its `-wal` and `-shm` files is read. The names there are the ones Firefox shows in window titles (this PC: Original profile, Muhammad Ferdy, Keina Nara, Naelya, Pewdy, Tiana). Matching ignores case. If the profile or the list is missing, the page opens in the default browser and the tool's reply says the profile was not found. An empty `JARVIS_FIREFOX_PROFILE` means the default browser.
 - `firefox_exe()` reads the path from the `App Paths` registry key and falls back to `C:/Program Files/Mozilla Firefox/firefox.exe`.
+
+### `browser`: playing state, media keys and scrolling
+
+- `is_playing()` asks Windows (`pycaw`) whether a Firefox audio stream is **active**. The sound level was tried first and rejected: it dips to silence while a song loads, so "previous" was refused right after "next". The state drops to inactive the instant the music is paused and is back within 0.2 s of resuming (traced every 0.2 s). It can still blink off for a moment during a song change, which is why `pause`, `next` and `previous` are tolerant of that.
+- `press_media_key("play_pause" | "next" | "previous")` sends the media key. Windows gives it to the browser's music player whichever window is in front, so no focus is needed. Pausing within the same instant as "next" correctly reports "the music did not pause" (the new song was still loading); half a second later it works.
+- `scroll(direction)` finds the Firefox window whose title contains the profile name, brings it to the front, presses Page Down or Page Up, and gives the focus back. It brings the window forward with a one-pixel mouse nudge (`nudge_mouse`, shared with `wake_screen`), not a tap of Alt: in Firefox a tap of Alt toggles the menu bar, so every second Page Down was swallowed by the menu (found by a real test: 913, then nothing, then 1826...). With the nudge, six scrolls in a row all worked (913, 1826, 2739, 1826, 913, 1826).
 
 ### `music`
 
@@ -225,6 +236,7 @@ TOOLS: dict[str, Tool] = {
   - `tests/test_tools.py`: each tool with the OS calls monkeypatched (pycaw, psutil, `subprocess.run`). Checks argument validation and the `"error: …"` path.
   - `tests/test_brain.py`: `Brain` with a fake client that returns scripted responses. Covers a plain answer, a single tool call, a dangerous tool confirmed or refused, the 3-round tool-call cap, history trimming, and the server-down message.
 - **Manual checks** (listed in the plan per task): `scripts/smoke_audio.py` for mic, Whisper and TTS; a real wake-word session; a real volume and lock run.
+- **After every new tool or prompt change, run:** `scripts/check_conversation.py 3` (must read 75/75 and 75/75), the 12-command trial, the shutdown question/goodbye/order probe (0 false requests, every real order understood), and sampling of each tool group with ordinary questions that must open or run nothing. Three times a new tool made a different, older behaviour regress (restart question, goodnight, reply language), and a check that passed three rounds in a row failed later because the server state changed, so repeat before believing a pass.
 - **Model behaviour check:** `uv run python scripts/check_conversation.py` (needs LlamaStash) runs multi-turn English/Indonesian chats against the real model with a clock that moves on every call, so a stale or wrong-language answer fails. Run it after any change to `SYSTEM_PROMPT` or the tool descriptions. The prompt wording is load-bearing with the 4B model and unit tests cannot see it.
 - No coverage percentage target. Every function in `tools.py` and `brain.py` has at least one test.
 - `uv run pytest -q` and `uv run ruff check` must pass before each commit.

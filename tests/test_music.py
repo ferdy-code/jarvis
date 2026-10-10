@@ -78,7 +78,7 @@ class Stage:
         monkeypatch.setattr(tools.browser, "open_url", self.open_url)
         monkeypatch.setattr(
             tools.browser,
-            "wait_for_sound",
+            "wait_for_playing",
             lambda playing, seconds: (
                 self.events.append(f"wait {playing} {seconds}") or sound
             ),
@@ -173,18 +173,60 @@ def test_play_music_is_a_safe_tool_that_describes_itself():
 # --- the helpers in browser.py that play_music relies on
 
 
-def test_playing_means_firefox_is_louder_than_the_threshold(monkeypatch):
-    monkeypatch.setattr(browser, "_firefox_peak", lambda: 0.2)
+class FakeSession:
+    """One entry of Windows' list of programs that have an audio stream."""
+
+    def __init__(self, program, state):
+        self.Process = (
+            None if program is None else SimpleNamespace(name=lambda: program)
+        )
+        self.State = state
+
+
+def fake_sessions(monkeypatch, *sessions):
+    from pycaw.pycaw import AudioUtilities
+
+    monkeypatch.setattr(
+        AudioUtilities, "GetAllSessions", staticmethod(lambda: list(sessions))
+    )
+
+
+def test_playing_means_a_firefox_audio_stream_is_active(monkeypatch):
+    fake_sessions(monkeypatch, FakeSession("firefox.exe", 1))
+
     assert browser.is_playing() is True
 
-    monkeypatch.setattr(browser, "_firefox_peak", lambda: 0.0)
+
+def test_a_paused_firefox_is_not_playing_even_though_its_session_still_exists(
+    monkeypatch,
+):
+    fake_sessions(monkeypatch, FakeSession("firefox.exe", 0))
+
     assert browser.is_playing() is False
+
+
+def test_other_programs_playing_sound_do_not_count(monkeypatch):
+    fake_sessions(
+        monkeypatch,
+        FakeSession("spotify.exe", 1),
+        FakeSession(None, 1),
+        FakeSession("firefox.exe", 0),
+    )
+
+    assert browser.is_playing() is False
+
+
+def test_a_silent_moment_between_two_songs_still_counts_as_playing(monkeypatch):
+    # the session stays active while the next track loads; only the loudness drops
+    fake_sessions(monkeypatch, FakeSession("firefox.exe", 1))
+
+    assert browser.is_playing() is True
 
 
 def test_pause_if_playing_presses_the_key_only_when_sound_is_coming_out(monkeypatch):
     keys = []
     monkeypatch.setattr(browser, "press_media_key", keys.append)
-    monkeypatch.setattr(browser, "wait_for_sound", lambda playing, seconds: True)
+    monkeypatch.setattr(browser, "wait_for_playing", lambda playing, seconds: True)
 
     monkeypatch.setattr(browser, "is_playing", lambda: False)
     assert browser.pause_if_playing() is False
@@ -195,15 +237,15 @@ def test_pause_if_playing_presses_the_key_only_when_sound_is_coming_out(monkeypa
     assert keys == ["play_pause"]
 
 
-def test_wait_for_sound_returns_as_soon_as_the_state_matches(monkeypatch):
+def test_wait_for_playing_returns_as_soon_as_the_state_matches(monkeypatch):
     states = iter([False, False, True])
     monkeypatch.setattr(browser, "is_playing", lambda: next(states))
     monkeypatch.setattr(browser.time, "sleep", lambda seconds: None)
 
-    assert browser.wait_for_sound(True, seconds=5) is True
+    assert browser.wait_for_playing(True, seconds=5) is True
 
 
-def test_wait_for_sound_gives_up_after_the_time(monkeypatch):
+def test_wait_for_playing_gives_up_after_the_time(monkeypatch):
     clock = SimpleNamespace(now=0.0)
     monkeypatch.setattr(browser, "is_playing", lambda: False)
     monkeypatch.setattr(browser.time, "monotonic", lambda: clock.now)
@@ -213,4 +255,4 @@ def test_wait_for_sound_gives_up_after_the_time(monkeypatch):
         lambda seconds: setattr(clock, "now", clock.now + seconds),
     )
 
-    assert browser.wait_for_sound(True, seconds=1) is False
+    assert browser.wait_for_playing(True, seconds=1) is False

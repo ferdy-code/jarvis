@@ -13,6 +13,7 @@ the internet.
 - Change the volume (up, down, mute, unmute) and lock the screen.
 - Turn the screen on when it is off ("wake up the screen", "nyalakan layar").
 - Play a song on YouTube Music ("putar lagu Tulus Hati-Hati di Jalan", "play Yellow by Coldplay"). A new request pauses the old song and opens the new one in a new Firefox tab.
+- Control the music and the page: "jeda musik" / "pause", "lanjutkan" / "resume", "lagu berikutnya" / "next song", "lagu sebelumnya", and "scroll down" / "gulir ke bawah".
 - Open a web page ("open YouTube", "buka github.com") or search Google ("search for nasi goreng recipes") in Firefox. Only `http` and `https` pages are opened, and Jarvis does not read them.
 - Shut down or restart the PC, but only after you say yes.
 
@@ -113,6 +114,7 @@ OpenAI itself, and the system prompt was tuned for the small local model.
 ## Limits
 
 - Every song opens a new Firefox tab, so tabs pile up until you close them.
+- Pause, resume and skip use the keyboard's media keys, which go to whichever tab played music most recently. Scrolling briefly brings your Firefox window to the front and then gives the focus back.
 - Playing music needs autoplay allowed for `music.youtube.com` (see Troubleshooting) and the
   internet. The pause, next and previous keys need a tab that is playing music.
 - Whisper sometimes mishears one- or two-word commands, and writes "computer" for

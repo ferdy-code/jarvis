@@ -73,7 +73,7 @@ def test_ask_remembers_earlier_turns():
     assert sent == ["one", "first", "two"]
 
 
-def test_history_is_trimmed_to_the_last_20_messages():
+def test_history_is_trimmed_to_the_last_10_turns():
     client = FakeClient([f"reply {i}" for i in range(15)])
     brain = Brain(client, model="m")
 
@@ -81,7 +81,8 @@ def test_history_is_trimmed_to_the_last_20_messages():
         brain.ask(f"question {i}")
 
     sent = client.requests[-1]["messages"]
-    assert len(sent) == 1 + 20
+    assert len(sent) == 1 + 10 * 2 + 1  # system, 10 earlier turns, the new question
+    assert sent[1]["content"] == "question 4"
     assert sent[-1]["content"] == "question 14"
 
 
@@ -212,19 +213,29 @@ def test_tool_calls_stop_after_three_rounds():
     assert "tools" not in client.requests[-1]
 
 
-def test_history_keeps_only_the_text_of_a_tool_turn():
-    client = FakeClient([call("clock"), "It is 10:00.", "ok"])
-    brain = Brain(client, model="m", tools={"clock": tool(lambda: "10:00")})
+def test_a_past_tool_turn_is_remembered_with_its_tool_call_and_result():
+    # With only the reply text remembered, the model started answering "Musik sudah
+    # dipause" without calling the tool at all: it copied its own earlier claims.
+    client = FakeClient([call("volume"), "Volume 90%.", "Okay."])
+    brain = Brain(client, model="m", tools={"volume": tool(lambda: "volume 90%")})
 
-    brain.ask("time?")
+    brain.ask("turn it down")
     brain.ask("thanks")
 
     sent = client.requests[-1]["messages"][1:]
-    assert [(m["role"], m["content"]) for m in sent] == [
-        ("user", "time?"),
-        ("assistant", "It is 10:00."),
-        ("user", "thanks"),
+    assert [m["role"] for m in sent] == [
+        "user",
+        "assistant",
+        "tool",
+        "assistant",
+        "user",
     ]
+    assert sent[1]["tool_calls"][0]["function"]["name"] == "volume"
+    assert sent[2] == {
+        "role": "tool",
+        "tool_call_id": "call-1",
+        "content": "volume 90%",
+    }
 
 
 def risky_brain(client, confirm, runs):
@@ -280,3 +291,150 @@ def test_safe_tool_never_asks_for_confirmation():
     brain.ask("time?")
 
     assert asked == []
+
+
+def system_prompt(client, request_index=0):
+    return client.requests[request_index]["messages"][0]["content"]
+
+
+def test_the_language_of_a_clearly_indonesian_message_is_told_to_the_model():
+    client = FakeClient(["ok"])
+
+    Brain(client, model="m").ask("jam berapa sekarang?")
+
+    assert "The user is speaking Indonesian" in system_prompt(client)
+
+
+def test_the_language_of_a_clearly_english_message_is_told_to_the_model():
+    client = FakeClient(["ok"])
+
+    Brain(client, model="m").ask("what time is it?")
+
+    assert "The user is speaking English" in system_prompt(client)
+
+
+def test_a_message_that_does_not_show_its_language_gets_no_hint():
+    client = FakeClient(["ok"])
+
+    Brain(client, model="m").ask("kecilkan volume")
+
+    assert "The user is speaking" not in system_prompt(client)
+
+
+def test_the_hint_follows_the_latest_message_not_the_earlier_ones():
+    client = FakeClient(["one", "two"])
+    brain = Brain(client, model="m")
+
+    brain.ask("what time is it?")
+    brain.ask("jam berapa sekarang?")
+
+    assert "speaking English" in system_prompt(client, 0)
+    assert "speaking Indonesian" in system_prompt(client, 1)
+
+
+def test_a_language_given_by_the_caller_wins():
+    client = FakeClient(["ok"])
+
+    Brain(client, model="m").ask("jam berapa sekarang?", lang="en")
+
+    assert "speaking English" in system_prompt(client)
+
+
+def sent_texts(client, request_index):
+    """What the model was shown (apart from the system prompt) in one request."""
+    return [
+        m["content"]
+        for m in client.requests[request_index]["messages"][1:]
+        if m["role"] in ("user", "assistant") and m.get("content")
+    ]
+
+
+def named_tool(name, fn):
+    return Tool(fn=fn, schema={"type": "function", "function": {"name": name}})
+
+
+def test_a_clock_reading_is_not_kept_in_the_conversation():
+    # a copied "It is 18:31" (in English, after an Indonesian question) was the bug
+    client = FakeClient([call("get_datetime"), "It is 18:31.", "Okay."])
+    brain = Brain(
+        client,
+        model="m",
+        tools={"get_datetime": named_tool("get_datetime", lambda: "18:31")},
+    )
+
+    brain.ask("what time is it?")
+    brain.ask("thanks")
+
+    assert sent_texts(client, 2) == ["thanks"]
+
+
+def test_a_battery_reading_is_not_kept_either():
+    client = FakeClient([call("get_battery"), "85%.", "Okay."])
+    brain = Brain(
+        client,
+        model="m",
+        tools={"get_battery": named_tool("get_battery", lambda: "85%")},
+    )
+
+    brain.ask("battery?")
+    brain.ask("thanks")
+
+    assert sent_texts(client, 2) == ["thanks"]
+
+
+def test_other_tool_turns_are_still_remembered_so_that_again_works():
+    client = FakeClient([call("set_volume"), "Volume 90%.", "Volume 80%."])
+    brain = Brain(
+        client,
+        model="m",
+        tools={"set_volume": named_tool("set_volume", lambda: "volume 90%")},
+    )
+
+    brain.ask("turn it down")
+    brain.ask("and again")
+
+    assert sent_texts(client, 2) == ["turn it down", "Volume 90%.", "and again"]
+
+
+def test_forgetting_a_clock_reading_keeps_the_rest_of_the_chat():
+    client = FakeClient(["Hello!", call("get_datetime"), "It is 18:31.", "Fine."])
+    brain = Brain(
+        client,
+        model="m",
+        tools={"get_datetime": named_tool("get_datetime", lambda: "18:31")},
+    )
+
+    brain.ask("hi")
+    brain.ask("what time is it?")
+    brain.ask("how are you?")
+
+    assert sent_texts(client, 3) == ["hi", "Hello!", "how are you?"]
+
+
+def test_the_reply_to_the_clock_question_itself_is_still_returned():
+    client = FakeClient([call("get_datetime"), "It is 18:31."])
+    brain = Brain(
+        client,
+        model="m",
+        tools={"get_datetime": named_tool("get_datetime", lambda: "18:31")},
+    )
+
+    assert brain.ask("what time is it?") == "It is 18:31."
+
+
+def test_trimming_the_history_never_separates_a_tool_call_from_its_result():
+    replies = []
+    for _ in range(14):
+        replies += [call("volume"), "Done."]
+    client = FakeClient(replies)
+    brain = Brain(client, model="m", tools={"volume": tool(lambda: "ok")})
+
+    for i in range(14):
+        brain.ask(f"turn {i}")
+
+    sent = client.requests[-1]["messages"][1:]
+    assert sent[0]["role"] == "user"  # the oldest kept message starts a turn
+    for position, message in enumerate(sent):
+        if message["role"] == "tool":
+            assert sent[position - 1]["role"] == "assistant"
+            assert sent[position - 1]["tool_calls"][0]["id"] == message["tool_call_id"]
