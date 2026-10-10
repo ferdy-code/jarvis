@@ -46,7 +46,7 @@ Plan: [plan.md](plan.md) · Spec: [SPEC.md](../SPEC.md)
 
 ---
 
-### Task 3: Time and battery answers
+### Task 3: Time and battery answers ✅
 **Description:** Add `tools.py` with the `Tool` dataclass and `TOOLS` registry, plus `get_datetime` and `get_battery`. `Brain` passes the tool schemas, runs the tool calls, feeds the results back, and stops after 3 rounds of tool calls.
 
 **Acceptance criteria:**

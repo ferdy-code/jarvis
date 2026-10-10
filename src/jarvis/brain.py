@@ -1,41 +1,116 @@
+import json
+
 import openai
+
+from jarvis.tools import Tool
 
 OFFLINE_MESSAGE = "My brain is offline. Is LlamaStash running?"
 MAX_HISTORY = 20
+MAX_TOOL_ROUNDS = 3
 
+# Wording matters: with thinking off, a prompt that only asks for short answers
+# made the model skip the tools and invent the time and battery level (0/9 calls).
+# Saying it cannot know these things itself fixed that (15/15, 0/9 false calls).
+# Spelling times out in Indonesian words was often wrong ("jam enam belas" for
+# 18:03), so it must copy them as digits (12/12 correct).
 SYSTEM_PROMPT = (
-    "You are Jarvis, a personal voice assistant running on the user's PC. "
-    "Your replies are spoken aloud, so keep them to 1-3 short sentences with no "
-    "markdown or lists. Reply in the language the user writes in (English or "
-    "Indonesian)."
+    "You are Jarvis, a voice assistant on the user's PC. You cannot know the "
+    "current date, time or battery level yourself: always call the matching "
+    "tool and never guess. After you have the tool result, answer in 1-3 short "
+    "spoken sentences with no markdown, in the language the user writes in "
+    "(English or Indonesian). Always write times as digits copied from the "
+    "tool result, for example 18:03, never spell them out. Never claim to "
+    "have done something unless a tool confirmed it."
 )
 
 LANGUAGE_NAMES = {"en": "English", "id": "Indonesian"}
 
 
 class Brain:
-    def __init__(self, client, model: str, extra_body: dict | None = None):
+    def __init__(
+        self,
+        client,
+        model: str,
+        tools: dict[str, Tool] | None = None,
+        extra_body: dict | None = None,
+    ):
         self.client = client
         self.model = model
+        self.tools = tools or {}
         self.extra_body = extra_body
+        # Only user and assistant text is remembered between turns. Tool calls
+        # live in the per-turn message list, so trimming can never split a
+        # tool call from its result.
         self.history: list[dict] = []
 
     def ask(self, text: str, lang: str | None = None) -> str:
         self.history.append({"role": "user", "content": text})
         self.history = self.history[-MAX_HISTORY:]
+        messages = [{"role": "system", "content": _system_prompt(lang)}]
+        messages += self.history
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "system", "content": _system_prompt(lang)}]
-                + self.history,
-                extra_body=self.extra_body,
-            )
+            reply = self._converse(messages)
         except openai.APIConnectionError:
             self.history.pop()
             return OFFLINE_MESSAGE
-        reply = response.choices[0].message.content or ""
         self.history.append({"role": "assistant", "content": reply})
         return reply
+
+    def _converse(self, messages: list[dict]) -> str:
+        for _ in range(MAX_TOOL_ROUNDS):
+            message = self._complete(messages, with_tools=True)
+            if not message.tool_calls:
+                return message.content or ""
+            messages.append(_assistant_message(message))
+            for tool_call in message.tool_calls:
+                result = self._run_tool(tool_call)
+                messages.append(
+                    {"role": "tool", "tool_call_id": tool_call.id, "content": result}
+                )
+        # Too many tool rounds: make the model answer with what it has.
+        return self._complete(messages, with_tools=False).content or ""
+
+    def _complete(self, messages: list[dict], with_tools: bool):
+        request = {
+            "model": self.model,
+            "messages": messages,
+            "extra_body": self.extra_body,
+        }
+        if with_tools and self.tools:
+            request["tools"] = [tool.schema for tool in self.tools.values()]
+        return self.client.chat.completions.create(**request).choices[0].message
+
+    def _run_tool(self, tool_call) -> str:
+        name = tool_call.function.name
+        tool = self.tools.get(name)
+        if tool is None:
+            return f"error: unknown tool {name!r}"
+        try:
+            arguments = json.loads(tool_call.function.arguments or "{}")
+        except json.JSONDecodeError as error:
+            return f"error: bad arguments ({error})"
+        try:
+            return str(tool.fn(**arguments))
+        except Exception as error:  # noqa: BLE001 - a broken tool must not crash Jarvis
+            return f"error: {error}"
+
+
+def _assistant_message(message) -> dict:
+    return {
+        "role": "assistant",
+        "content": message.content or "",
+        "tool_calls": [
+            {
+                "id": call.id,
+                "type": "function",
+                "function": {
+                    "name": call.function.name,
+                    "arguments": call.function.arguments,
+                },
+            }
+            for call in message.tool_calls
+        ],
+    }
 
 
 def _system_prompt(lang: str | None) -> str:

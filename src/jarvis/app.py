@@ -4,6 +4,7 @@ import openai
 
 from jarvis import config
 from jarvis.brain import Brain
+from jarvis.tools import TOOLS
 
 EXIT_WORDS = {"exit", "quit"}
 
@@ -22,7 +23,7 @@ def main() -> None:
         api_key=config.API_KEY,
         max_retries=config.MAX_RETRIES,
     )
-    brain = Brain(client, config.MODEL, extra_body=config.EXTRA_BODY)
+    brain = Brain(client, config.MODEL, tools=TOOLS, extra_body=config.EXTRA_BODY)
 
     print("Jarvis is ready. Type 'exit' to quit.")
     try:
