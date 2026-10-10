@@ -8,7 +8,7 @@ from urllib.parse import quote_plus
 import psutil
 from pycaw.pycaw import AudioUtilities
 
-from jarvis import browser
+from jarvis import browser, music
 
 
 @dataclass(frozen=True)
@@ -83,6 +83,28 @@ def search_web(query: str) -> str:
     return open_website("https://www.google.com/search?q=" + quote_plus(query))
 
 
+def play_music(query: str) -> str:
+    query = query.strip()
+    if not query:
+        return "error: nothing to play"
+    try:
+        song = music.find_song(query)
+    except Exception as error:  # noqa: BLE001 - any network or service trouble
+        return f"error: could not search YouTube Music ({error})"
+    if song is None:
+        return f"error: no song found for {query!r}"
+    browser.pause_if_playing()  # otherwise the old song keeps playing under the new one
+    opened = open_website(song.url)
+    if opened.startswith("error"):
+        return opened
+    if browser.wait_for_sound(True, 8):
+        return f"playing '{song.title}' by {song.artist}"
+    return (
+        f"opened '{song.title}' by {song.artist}, but no sound started within 8 seconds; "
+        "Firefox may be blocking autoplay for music.youtube.com"
+    )
+
+
 def lock_pc() -> str:
     subprocess.run(["rundll32.exe", "user32.dll,LockWorkStation"], check=True)
     return "locked"
@@ -145,6 +167,19 @@ TOOLS: dict[str, Tool] = {
             }
         },
         required=["address"],
+    ),
+    "play_music": _tool(
+        play_music,
+        "Play a song on YouTube Music in the browser. Give the song title and artist "
+        "if known, for example 'Tulus Hati-Hati di Jalan'. Use it when the user asks "
+        "to play or listen to a song or an artist. Replaces whatever is playing.",
+        properties={
+            "query": {
+                "type": "string",
+                "description": "Song title and/or artist, without words like 'play'",
+            }
+        },
+        required=["query"],
     ),
     "search_web": _tool(
         search_web,

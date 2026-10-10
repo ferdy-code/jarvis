@@ -4,6 +4,7 @@ import shutil
 import sqlite3
 import subprocess
 import tempfile
+import time
 import webbrowser
 from urllib.parse import urlparse
 
@@ -11,6 +12,8 @@ from jarvis import config
 
 MAX_ADDRESS_LENGTH = 2048
 DEFAULT_FIREFOX = "C:/Program Files/Mozilla Firefox/firefox.exe"
+LOUD = 0.005  # a Firefox audio level above this (0-1) means sound is coming out
+MEDIA_KEYS = {"next": 0xB0, "previous": 0xB1, "play_pause": 0xB3}
 
 
 def check_web_address(address: str) -> str:
@@ -98,3 +101,55 @@ def open_url(url: str) -> str:
         return f"opened in the default browser (Firefox profile '{name}' not found)"
     subprocess.Popen([firefox_exe(), "--profile", folder, "-new-tab", url])
     return f"opened in Firefox ({name})"
+
+
+def _firefox_peak() -> float:
+    """The loudest level of Firefox's sound over the last third of a second (0-1).
+
+    One reading can land in a quiet beat of a song, so take the best of four.
+    """
+    from pycaw.api.endpointvolume import IAudioMeterInformation
+    from pycaw.pycaw import AudioUtilities
+
+    peak = 0.0
+    for _ in range(4):
+        for session in AudioUtilities.GetAllSessions():
+            if session.Process and "firefox" in session.Process.name().lower():
+                meter = session._ctl.QueryInterface(IAudioMeterInformation)
+                peak = max(peak, meter.GetPeakValue())
+        time.sleep(0.1)
+    return peak
+
+
+def is_playing() -> bool:
+    return _firefox_peak() > LOUD
+
+
+def press_media_key(name: str) -> None:
+    """Press a media key. Windows gives it to the browser's music player, whichever
+    window is in front, so no window has to be focused."""
+    import ctypes
+
+    code = MEDIA_KEYS[name]
+    ctypes.windll.user32.keybd_event(code, 0, 0x1, 0)  # 0x1: extended key
+    ctypes.windll.user32.keybd_event(code, 0, 0x1 | 0x2, 0)  # 0x2: key up
+
+
+def wait_for_sound(playing: bool, seconds: float) -> bool:
+    """Wait until Firefox is (or is not) making sound. False if the time ran out."""
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        if is_playing() == playing:
+            return True
+        time.sleep(0.1)
+    return is_playing() == playing
+
+
+def pause_if_playing() -> bool:
+    """Pause whatever Firefox is playing. Play/Pause is a toggle, so it is only
+    pressed when sound is coming out: otherwise it would start a paused song."""
+    if not is_playing():
+        return False
+    press_media_key("play_pause")
+    wait_for_sound(False, 3)
+    return True

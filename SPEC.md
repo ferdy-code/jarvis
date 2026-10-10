@@ -42,7 +42,8 @@ It's a learning project that should also be reliable enough for daily use, so th
 | `tts` | `tts.py` | `speak(text, lang)` | — |
 | `stt` | `stt.py` | Record until silence → `(text, lang)` | — |
 | `wake` | `wake.py` | Block until "hey jarvis" is heard | — |
-| `browser` | `browser.py` | Opens web pages in a chosen Firefox profile | — |
+| `browser` | `browser.py` | Opens web pages in a chosen Firefox profile; reads Firefox's sound level; presses media keys | — |
+| `music` | `music.py` | Finds a song on YouTube Music (`ytmusicapi`) | — |
 | `app` | `app.py` | CLI entry, wires input → brain → output | all |
 
 **Build order:** `brain` + `system-tools`, then `app` (typed chat), then `tts`, then `stt`, then `wake`.
@@ -60,6 +61,7 @@ Each tool is a plain function that returns a short string for the LLM to work in
 | `wake_screen` | — | Moves the mouse one pixel and back (`mouse_event`), which wakes a display that is off. Measured: display OFF, then ON 0.24 s after the call. Returns a note that a locked PC stays locked | no |
 | `open_website` | `address` | Opens an `http` or `https` page in Firefox through `browser.open_url`. A bare domain such as `youtube.com` gets `https://`. It cannot read the page | no |
 | `search_web` | `query` | Opens a Google results page for the query (`https://www.google.com/search?q=...`). It cannot read the results. The description says to use it only when the user asks to search or asks about things the model cannot know (news, weather); without that wording the 4B model searched for trivia and jokes (4 of 10 ordinary questions) | no |
+| `play_music` | `query` | Finds the best matching song with `ytmusicapi`, pauses whatever Firefox is playing (only if sound is coming out, because Play/Pause is a toggle), opens `music.youtube.com/watch?v=ID` in the Keina Nara profile, then waits up to 8 s for Firefox's audio meter to show sound. Replies `playing 'Title' by Artist`, or says no sound started and autoplay may be blocked, so it never claims success on a silent page. Measured: 3.7-4.7 s, the old song paused before the new one, the tab title became the song's | no |
 | `power` | `action: shutdown\|restart` | `shutdown /s /t 5` or `shutdown /r /t 5` | **yes** |
 
 - `TOOLS: dict[str, Tool]` holds `fn`, `schema` and `dangerous`. That's the only registry, with no plugin system.
@@ -109,6 +111,10 @@ Each tool is a plain function that returns a short string for the LLM to work in
 - `open_url(url)` starts `firefox.exe --profile <folder> -new-tab <url>`. Windows hands a plain link to whichever Firefox profile answers first (it was Muhammad Ferdy's one time and Keina Nara's another), so the profile is chosen explicitly. `--profile` with the running profile's folder opens a tab in its existing window (checked).
 - `profile_path(name)` finds the folder from Firefox's profile list, a SQLite database in `%APPDATA%/Mozilla/Firefox/Profile Groups` that Firefox keeps open, so a copy with its `-wal` and `-shm` files is read. The names there are the ones Firefox shows in window titles (this PC: Original profile, Muhammad Ferdy, Keina Nara, Naelya, Pewdy, Tiana). Matching ignores case. If the profile or the list is missing, the page opens in the default browser and the tool's reply says the profile was not found. An empty `JARVIS_FIREFOX_PROFILE` means the default browser.
 - `firefox_exe()` reads the path from the `App Paths` registry key and falls back to `C:/Program Files/Mozilla Firefox/firefox.exe`.
+
+### `music`
+
+- `find_song(query)` takes the first of three `ytmusicapi` song results that has a video id and returns `Song(title, artist, video_id)`, or None. 9 of 9 named songs, English and Indonesian, matched the right title and artist in 0.4-1.0 s. The client is created once. It needs the internet but no login.
 
 ### `app`
 

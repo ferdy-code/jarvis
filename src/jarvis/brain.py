@@ -17,6 +17,11 @@ MAX_TOOL_ROUNDS = 3
 # In a longer chat it copied its own earlier answer instead of calling the tool
 # again (a stale time, and English after an Indonesian question), so the last
 # two sentences forbid that (fixed 6 of 90 failures, see scripts/check_conversation.py).
+# The how-to sentence stops questions being treated as orders: each new tool nudged
+# "how do I restart my computer?" into a restart request (3 of 3 after play_music);
+# with it, 0 of 27 question phrasings, and all 18 real orders still work. Keep the
+# language sentence LAST: with the how-to sentence after it, the reply language was
+# wrong 6 of 75 times in the long conversations; this order gives 75 of 75.
 SYSTEM_PROMPT = (
     "You are Jarvis, a voice assistant on the user's PC. You cannot know the "
     "current date, time or battery level yourself: always call the matching "
@@ -27,8 +32,10 @@ SYSTEM_PROMPT = (
     "have done something unless a tool confirmed it. Things on this PC change "
     "all the time, so for every question about the date, time or battery call "
     "the tool again, even if you already answered such a question earlier in "
-    "this conversation. Always reply in the language of the user's latest "
-    "message, not the language of earlier messages."
+    "this conversation. When the user asks how to do something, or what "
+    "something is, answer in words; only take an action when the user tells you "
+    "to do it. Always reply in the language of the user's latest message, not "
+    "the language of earlier messages."
 )
 
 LANGUAGE_NAMES = {"en": "English", "id": "Indonesian"}

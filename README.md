@@ -2,8 +2,9 @@
 
 A personal assistant for your Windows PC that you can type to or talk to, in English or
 Indonesian. Say "Hey Jarvis" and a command, and it answers out loud. The language model,
-speech recognition and voice all run on your own machine, so it works offline and costs
-nothing to use.
+speech recognition and voice all run on your own machine, so chatting and controlling the PC
+work offline and cost nothing. Only the web features (music, opening pages, searching) need
+the internet.
 
 ## What it can do
 
@@ -11,6 +12,7 @@ nothing to use.
 - Tell you the date, time and battery level.
 - Change the volume (up, down, mute, unmute) and lock the screen.
 - Turn the screen on when it is off ("wake up the screen", "nyalakan layar").
+- Play a song on YouTube Music ("putar lagu Tulus Hati-Hati di Jalan", "play Yellow by Coldplay"). A new request pauses the old song and opens the new one in a new Firefox tab.
 - Open a web page ("open YouTube", "buka github.com") or search Google ("search for nasi goreng recipes") in Firefox. Only `http` and `https` pages are opened, and Jarvis does not read them.
 - Shut down or restart the PC, but only after you say yes.
 
@@ -90,12 +92,15 @@ OpenAI itself, and the system prompt was tuned for the small local model.
   requests. Only "y", "yes", "yeah", "ya" or "iya" count. Anything else, including
   silence, cancels.
 - Microphone audio is only kept in memory while it is processed, never written to disk.
-- Nothing leaves your PC unless you point `JARVIS_BASE_URL` somewhere else.
+- Your conversation stays on your PC unless you point `JARVIS_BASE_URL` somewhere else. The
+  only things sent out are the song name you ask for (to YouTube Music, to find it) and the
+  pages Firefox loads when you ask for them.
 
 ## Troubleshooting
 
 | What you see | What to do |
 |---|---|
+| `... no sound started ... Firefox may be blocking autoplay` | Firefox does not let a page play sound until it is allowed. In the Firefox profile Jarvis uses, open a `music.youtube.com` page, click the icon at the left end of the address bar, and under Permissions > Autoplay choose Allow Audio and Video. |
 | `My brain is offline. Is LlamaStash running?` | Start LlamaStash and load the model. `llamastash status` should list it. |
 | `Voice is off (...)` | The voice could not load. Typing still works. Check the message, for example a wrong `JARVIS_VOICE`. |
 | `Voice input is off (...)` | The microphone, Whisper or the wake word failed to load. Typing still works. |
@@ -107,6 +112,9 @@ OpenAI itself, and the system prompt was tuned for the small local model.
 
 ## Limits
 
+- Every song opens a new Firefox tab, so tabs pile up until you close them.
+- Playing music needs autoplay allowed for `music.youtube.com` (see Troubleshooting) and the
+  internet. The pause, next and previous keys need a tab that is playing music.
 - Whisper sometimes mishears one- or two-word commands, and writes "computer" for
   "komputer", so Jarvis may then answer in English.
 - Answers and actions depend on a small 4B model. After a time question it may answer a

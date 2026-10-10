@@ -242,3 +242,17 @@ Plan: [plan.md](plan.md) · Spec: [SPEC.md](../SPEC.md)
 
 **Found on the way:** adding the two tools made the 4B model open Google for trivia and jokes (4 of 10 ordinary questions) and ask to restart the PC for "how do I restart my computer?" (3 of 3). Stricter tool descriptions fixed both; the wording is recorded in comments above them.
 **Files:** `src/jarvis/browser.py`, `src/jarvis/tools.py`, `src/jarvis/config.py`, `tests/test_browser.py`, `tests/test_tools.py`, `README.md`, `SPEC.md`
+
+### Task 13: Play music on YouTube Music ✅
+**Description:** "Putar lagu ..." plays the song in the user's Firefox profile (Keina Nara). New `music.py` (ytmusicapi), sound helpers in `browser.py` (Firefox's audio level through `pycaw`, media keys, `pause_if_playing`, `wait_for_sound`), tool `play_music`. Needs autoplay allowed for `music.youtube.com` in that profile, which the user set after three failed tests (the Autoplay > Settings dialog saved nothing; the lock-icon panel did).
+
+**Acceptance criteria:**
+- [x] "putar lagu Tulus Hati-Hati di Jalan" plays it: reply `playing 'Hati-Hati di Jalan' by Tulus`, sound confirmed by the audio meter (4.7 s)
+- [x] A second request replaces the first: the old song is paused (meter silent during the switch), the window title becomes "Yellow | YouTube Music"
+- [x] If no sound starts in 8 s the reply says so and mentions autoplay, instead of claiming success; no song found and search failures come back as errors (191 tests)
+- [x] The model: 21/21 music phrasings with a clean query; other tools unchanged; ordinary and how-to questions run nothing (33/33)
+- [x] No regression: 0 wrong of 36 trial runs, 75/75 data and 75/75 language in the long conversations, 0/27 false shutdown requests with 18/18 real orders
+
+**Found on the way:** the new tool again pushed "how do I restart my computer?" into a restart request (3 of 3). A system-prompt sentence (questions get answers, only orders get actions) fixed it for every tool, but placed after the language sentence it broke the reply language (6 of 75 wrong); placed before it, 75/75.
+**Not done:** the spoken reply overlaps the first seconds of the song; tabs pile up (one per song).
+**Files:** `src/jarvis/music.py`, `src/jarvis/browser.py`, `src/jarvis/tools.py`, `src/jarvis/brain.py`, `tests/test_music.py`, `README.md`, `SPEC.md`

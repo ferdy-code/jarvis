@@ -75,7 +75,8 @@ accounts.
 
 - **Firefox profile decided (2026-10-10): Keina Nara.** Jarvis opens everything in that profile (`JARVIS_FIREFOX_PROFILE`). The music plays there. The autoplay permission must be set in that profile.
 - **Done: `open_website` and `search_web`**, plus the profile targeting. Checked with the real Firefox: the page opened in the Keina Nara window. Model sampling: 21/21 site requests with valid addresses, 15/15 searches, 30/30 ordinary questions opened nothing, and the other tools were unchanged.
-- **Next:** `play_youtube_music(query)` (autoplay confirmed, so this is unblocked) and `browser_control` (media keys confirmed: pause and resume in 0.2 s; scroll with Page Down).
+- **Done: `play_music(query)`** (2026-10-10). Real run: `playing 'Hati-Hati di Jalan' by Tulus` in 4.7 s; a second request paused it and played `Yellow` (tab title "Yellow | YouTube Music"). Model: 21/21 phrasings with clean queries.
+- **Next:** `browser_control` (pause, resume, next, previous with the media keys, confirmed for pause and resume; scroll with Page Down).
 
 ## Not Doing (and Why)
 
