@@ -137,7 +137,7 @@ Plan: [plan.md](plan.md) · Spec: [SPEC.md](../SPEC.md)
 
 ## Phase 3: Listening Jarvis
 
-### Task 7: Speech-to-text with faster-whisper
+### Task 7: Speech-to-text with faster-whisper ✅ (code and GPU done; the real-microphone test is left to the user)
 **Description:** `stt.listen()` records 16 kHz mono until 1.0 s of silence (or 15 s max), runs Whisper `small` on CUDA float16, and returns `(text, lang)`, with `lang` limited to `en` or `id`. Microphone audio is never written to disk.
 
 **Acceptance criteria:**
@@ -150,7 +150,7 @@ Plan: [plan.md](plan.md) · Spec: [SPEC.md](../SPEC.md)
 - [ ] `nvidia-smi` while Qwen and Whisper are both loaded: VRAM fits
 
 **Dependencies:** Task 1
-**Known problem (found in Task 6):** `WhisperModel(device="cuda")` loads but the first transcription fails with `Library cublas64_12.dll is not found`. Fix by installing the CUDA 12 runtime libraries (`nvidia-cublas-cu12`, maybe `nvidia-cudnn-cu12`) and making their DLLs findable, or use CPU `int8` (small: about 1-2 s per short clip; measure it). Also confirm the RTX 5060 is supported by ctranslate2's CUDA build.
+**Result:** GPU works with `nvidia-cublas-cu12` + `nvidia-cudnn-cu12` (+399 MiB, 0.13 s per phrase, versus 2.7 s on the CPU). See SPEC `stt`.
 **Files:** `src/jarvis/stt.py`, `scripts/smoke_audio.py`
 **Scope:** S
 
@@ -174,6 +174,7 @@ Plan: [plan.md](plan.md) · Spec: [SPEC.md](../SPEC.md)
 ---
 
 ### Task 9: Full voice loop in the app
+**Carry over from Task 7:** accept `yeah` as a yes (Whisper hears a spoken `ya` as `Yeah.`; as `no` it fails safe but is annoying). Catch errors from `stt.listen()` in the voice thread, since a GPU out-of-memory can happen mid-run. The microphone read as digital silence during Task 7, so check it is unmuted first.
 **Description:** `uv run jarvis` starts a daemon voice thread that loops: wake word, then a short generated chime, then `stt.listen()`, then `brain.ask()`, then print and `speak()`. One lock keeps typed and voice turns from overlapping. Voice turns update the language. A voice `confirm` speaks the question and accepts yes, ya or iya. If the microphone, Whisper or wake model fails, Jarvis warns and stays typed-only.
 
 **Acceptance criteria:**

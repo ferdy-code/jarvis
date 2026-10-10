@@ -54,7 +54,7 @@ tools ───────┘                              │    │    │
 - [ ] Human review (voice choice)
 
 ### Phase 3: Listening Jarvis
-- [ ] Task 7: Speech-to-text with faster-whisper (smoke script)
+- [x] Task 7: Speech-to-text with faster-whisper (smoke script)
 - [ ] Task 8: Wake-word detector (smoke script)
 - [ ] Task 9: Full voice loop in the app
 - [ ] Task 10: README usage docs

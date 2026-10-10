@@ -5,6 +5,9 @@ BASE_URL = os.environ.get("JARVIS_BASE_URL", "http://127.0.0.1:11435/v1")
 MODEL = os.environ.get("JARVIS_MODEL", "Qwen3.5-4B-Q4_K_M")
 API_KEY = os.environ.get("JARVIS_API_KEY", "llamastash")
 VOICE = os.environ.get("JARVIS_VOICE", "M2")
+WHISPER_MODEL = os.environ.get("JARVIS_WHISPER_MODEL", "small")
+# Loudness (0-1) a block of microphone audio must pass to count as speech.
+MIC_THRESHOLD = float(os.environ.get("JARVIS_MIC_THRESHOLD", "0.01"))
 
 # Only llama.cpp gets these; a hosted API may reject them. Temperature 0 makes
 # tool choice repeatable: at 0.7 the model sometimes asked to shut the PC down

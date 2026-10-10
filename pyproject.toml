@@ -9,6 +9,8 @@ authors = [
 requires-python = ">=3.14"
 dependencies = [
     "faster-whisper>=1.2.1",
+    "nvidia-cublas-cu12>=12.9.2.10",
+    "nvidia-cudnn-cu12>=9.27.0.42",
     "openai>=3.28.0",
     "openwakeword>=0.4.0",
     "psutil>=7.2.2",

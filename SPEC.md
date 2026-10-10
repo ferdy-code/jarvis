@@ -84,9 +84,11 @@ Each tool is a plain function that returns a short string for the LLM to work in
 
 ### `stt`
 
-- `listen() -> tuple[str, str]` records from the default microphone at 16 kHz mono. It stops after 1.0 s of silence (energy threshold) or 15 s total, then runs `faster-whisper` (`small`, `cuda`, `float16`).
-- It returns `(text, lang)`. If Whisper detects a language other than `en` or `id`, `lang` is set to `en`.
-- It returns `("", lang)` when nothing was said.
+- `listen() -> tuple[str, str]` records from the default microphone at 16 kHz mono in 80 ms blocks. Speech starts when a block's loudness passes `JARVIS_MIC_THRESHOLD` (default 0.01); it stops after 1.0 s of silence or 15 s total, and gives up if nobody speaks within 6 s. A little audio before the start is kept so the first word is not clipped. Audio is never written to disk.
+- Whisper runs as `small`, `int8_float16`, on the GPU (+399 MiB; float16 would need +751 MiB, and only about 900 MiB are free next to the Qwen model). It needs the CUDA 12 libraries from the `nvidia-cublas-cu12` and `nvidia-cudnn-cu12` packages, whose folders `stt` puts on `PATH` (`add_dll_directory` is not enough). If the GPU cannot be used, it prints a warning and falls back to CPU `int8`, which takes 2.7 s per phrase instead of 0.13 s. The first run ever spends about 25 s compiling kernels for the RTX 5060; later starts take 2-4 s.
+- It returns `(text, lang)` with `lang` always `en` or `id`. Short commands are often detected as Spanish or Czech, so when another language wins, `stt` takes the likelier of `en` and `id` and decodes again with that language forced.
+- Settings that mattered (46 synthetic commands plus noise): the speech filter (`vad_filter`) stops Whisper writing words for silence and room noise ("Fussball"), and the vocabulary prompt fixes "kecilkan follow" and "lock my pc" heard as "Lie". Spelling variants such as "computer" for "komputer" are left alone because the LLM understands them.
+- It returns `("", "en")` when nothing was said.
 
 ### `wake`
 
@@ -113,6 +115,7 @@ Plain module-level constants, read once from environment variables with defaults
 | `JARVIS_MODEL` | `Qwen3.5-4B-Q4_K_M` |
 | `JARVIS_API_KEY` | `llamastash` (stub, ignored by the loopback proxy) |
 | `JARVIS_WHISPER_MODEL` | `small` |
+| `JARVIS_MIC_THRESHOLD` | `0.01` |
 | `JARVIS_VOICE` | `M2` |
 | `JARVIS_WAKE_THRESHOLD` | `0.5` |
 
@@ -235,6 +238,6 @@ TOOLS: dict[str, Tool] = {
 ## Open Questions
 
 1. ~~**Supertonic voice**~~ **Resolved (Task 6):** the user chose `M2` after auditioning the presets (`M1`-`M5`, `F1`-`F5`).
-2. **Whisper size:** `small` is the starting point. If Indonesian accuracy is poor, try `medium` (more VRAM, slower). This gets decided after the smoke test.
+2. **Whisper size:** `small` is the starting point, and it is accurate enough on clear synthetic speech (37 of 46 exact on one to three word commands; most misses are spelling variants). `medium` would not fit in the free GPU memory. Final decision after the real-microphone test in Task 7.
 3. ~~**Python 3.14 wheels**~~ **Resolved (Task 1):** every dependency installs and imports on Python 3.14, so no fallback is needed. `ctranslate2` sees the GPU (CUDA, float16 supported). `onnxruntime` is CPU-only, which is fine for the wake word.
 4. **Wake-word chime:** a short beep after "hey jarvis" so you know it's listening. I've assumed yes, using a generated tone with no audio file.
