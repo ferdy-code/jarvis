@@ -1,7 +1,7 @@
 [project]
 name = "jarvis"
 version = "0.1.0"
-description = "Add your description here"
+description = "A local voice and text assistant for Windows, in English and Indonesian."
 readme = "README.md"
 authors = [
     { name = "Ferdy PC", email = "mferdy@gmail.com" }

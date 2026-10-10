@@ -192,7 +192,7 @@ Plan: [plan.md](plan.md) · Spec: [SPEC.md](../SPEC.md)
 
 ---
 
-### Task 10: README usage docs
+### Task 10: README usage docs ✅
 **Description:** Write the README: what Jarvis is, prerequisites (LlamaStash plus the model, uv), install and run commands, the env vars for switching to OpenAI, the list of voice commands, and troubleshooting (brain offline, no mic, VRAM).
 
 **Acceptance criteria:**

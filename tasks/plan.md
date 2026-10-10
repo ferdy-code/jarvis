@@ -57,7 +57,7 @@ tools ───────┘                              │    │    │
 - [x] Task 7: Speech-to-text with faster-whisper (smoke script)
 - [x] Task 8: Wake-word detector (smoke script)
 - [x] Task 9: Full voice loop in the app
-- [ ] Task 10: README usage docs
+- [x] Task 10: README usage docs
 
 ### Checkpoint C: MVP complete
 - [ ] All 9 SPEC success criteria pass
