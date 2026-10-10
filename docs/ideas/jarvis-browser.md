@@ -29,7 +29,13 @@ and it keeps every existing guarantee. B builds on it once A is in daily use.
 
 ## Key Assumptions to Validate (before writing feature code)
 
-- [x] **Autoplay: BLOCKED by default** (tested 2026-10-10). With everything paused, a track
+- [ ] **Autoplay: BLOCKED, second test also blocked** (tested 2026-10-10 twice). The second
+  test used `browser.open_url` into the Keina Nara profile after the user said autoplay was
+  allowed: silent for 25 s, and that profile had no autoplay permission row and no
+  `media.autoplay.*` preference saved. The Autoplay > Settings dialog may only set the
+  default for all sites; the reliable per-site route is the site-info panel on a
+  `music.youtube.com` tab (Permissions > Autoplay > Allow Audio and Video). Re-test after that.
+  First test, with the default settings: With everything paused, a track
   opened by its link (`music.youtube.com/watch?v=ID`) stayed silent for 25 s; the tab showed
   only "YouTube Music". Firefox does not let a page play sound until the user has clicked on
   it, and a page opened by another program has had no click. Measured with Windows' audio
