@@ -123,3 +123,16 @@ def listen() -> tuple[str, str]:
     if audio is None:
         return "", "en"
     return transcribe(model, audio)
+
+
+def mic_peak(seconds: float = 1.0) -> float:
+    """Loudest sample (0-1) heard in the next moments; near 0 means a dead microphone."""
+    import sounddevice
+
+    warmup_blocks = 3  # the first blocks of a device are not real audio yet
+    blocks = warmup_blocks + int(seconds * SAMPLE_RATE / BLOCK)
+    with sounddevice.InputStream(
+        samplerate=SAMPLE_RATE, channels=1, dtype="float32", blocksize=BLOCK
+    ) as stream:
+        heard = [stream.read(BLOCK)[0] for _ in range(blocks)]
+    return float(np.abs(np.concatenate(heard[warmup_blocks:])).max())

@@ -39,3 +39,8 @@ def wait_for_wake_word() -> None:
             lambda block: model.predict(block)[KEY],
             config.WAKE_THRESHOLD,
         )
+
+
+def load() -> None:
+    """Build a model now, so a problem shows up at start-up and not at 'hey jarvis'."""
+    _new_model()

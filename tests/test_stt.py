@@ -123,3 +123,24 @@ def test_whisper_is_told_to_filter_non_speech_and_given_the_command_vocabulary()
 
     assert model.calls[0]["vad_filter"] is True
     assert "volume" in model.calls[0]["initial_prompt"]
+
+
+def test_mic_peak_is_the_loudest_sample_after_the_device_warms_up(monkeypatch):
+    levels = [0.9, 0.9, 0.9, 0.0, 0.3, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+    class Stream:
+        def __init__(self, **_settings):
+            self.blocks = iter(levels)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            pass
+
+        def read(self, frames):
+            return np.full((frames, 1), next(self.blocks), dtype=np.float32), False
+
+    monkeypatch.setattr("sounddevice.InputStream", Stream)
+
+    assert stt.mic_peak(seconds=0.8) == np.float32(0.3)

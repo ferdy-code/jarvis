@@ -104,8 +104,11 @@ Each tool is a plain function that returns a short string for the LLM to work in
 - **Main thread:** reads typed lines. `exit` or `quit` stops Jarvis.
 - **Voice thread (daemon):** loops wake → beep → `stt.listen()` → `brain.ask()` → print + `tts.speak()`.
 - One lock around `brain.ask` + `speak`, so typed and voice turns never overlap.
-- **Language:** voice turns use Whisper's language. Typed turns reuse the last detected language (English to start).
-- **Confirm:** a typed turn asks `y/n` on the terminal. A voice turn speaks the question, then `stt.listen()` and accepts `yes`/`ya`/`iya`. Anything else counts as no.
+- **Language:** the model is not given a language hint (Whisper often labels two-word commands wrongly, and a wrong hint made the model answer in the wrong language); it answers in the language of the text it receives. The voice a reply is spoken in comes from the reply text (`tts.guess_lang`), for typed and voice turns alike. Whisper's language is used for one thing: the language of the spoken confirmation question.
+- **Confirm:** a typed turn asks `[y/N]` on the terminal. A voice turn speaks the question ("Do you want me to run power action restart? Say yes or no.", or the Indonesian version), then `stt.listen()` and accepts `y`/`yes`/`yeah`/`ya`/`iya` (Whisper hears a spoken "ya" as "Yeah."). Anything else, including silence, counts as no.
+- **Echo guard:** if the wake word fires while a turn is in progress (for example Jarvis saying its own name from a typed reply), it is ignored.
+- **Start-up:** with voice on, Jarvis loads the voice (1.4 s), Whisper (2.0 s), the wake model (1.0 s) and checks the microphone for 1 s, about 6 s in all. A microphone that is silent (peak under 0.0003) gets a warning, not a shutdown.
+- **Speed (everything real except the microphone and speakers):** Jarvis starts talking 2.6-3.1 s after the end of the user's speech, which includes the 1.04 s wait to notice the speech has ended. The limit is 4 s.
 - **Graceful degradation:** if the microphone, Whisper, or the wake model fails to load, Jarvis prints a warning and runs typed-only. If TTS fails to load, it prints text only. It only exits on `exit` or Ctrl+C.
 
 ### Config (`config.py`)

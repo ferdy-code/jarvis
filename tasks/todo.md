@@ -173,7 +173,7 @@ Plan: [plan.md](plan.md) · Spec: [SPEC.md](../SPEC.md)
 
 ---
 
-### Task 9: Full voice loop in the app
+### Task 9: Full voice loop in the app ✅ (built and checked with a scripted microphone; the real-microphone checks are left to the user)
 **Carry over from Task 7:** accept `yeah` as a yes (Whisper hears a spoken `ya` as `Yeah.`; as `no` it fails safe but is annoying). Catch errors from `stt.listen()` in the voice thread, since a GPU out-of-memory can happen mid-run. The microphone read as digital silence during Task 7, so check it is unmuted first.
 **Description:** `uv run jarvis` starts a daemon voice thread that loops: wake word, then a short generated chime, then `stt.listen()`, then `brain.ask()`, then print and `speak()`. One lock keeps typed and voice turns from overlapping. Voice turns update the language. A voice `confirm` speaks the question and accepts yes, ya or iya. If the microphone, Whisper or wake model fails, Jarvis warns and stays typed-only.
 
