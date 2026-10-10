@@ -156,7 +156,7 @@ Plan: [plan.md](plan.md) · Spec: [SPEC.md](../SPEC.md)
 
 ---
 
-### Task 8: Wake-word detector
+### Task 8: Wake-word detector ✅ (code done and checked on synthetic speech; the real-microphone test is left to the user)
 **Description:** `wake.wait_for_wake_word()` streams the microphone in 80 ms chunks into openWakeWord's `hey_jarvis` model and returns when the score is ≥ `JARVIS_WAKE_THRESHOLD`.
 
 **Acceptance criteria:**

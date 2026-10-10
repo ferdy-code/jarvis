@@ -8,6 +8,7 @@ VOICE = os.environ.get("JARVIS_VOICE", "M2")
 WHISPER_MODEL = os.environ.get("JARVIS_WHISPER_MODEL", "small")
 # Loudness (0-1) a block of microphone audio must pass to count as speech.
 MIC_THRESHOLD = float(os.environ.get("JARVIS_MIC_THRESHOLD", "0.01"))
+WAKE_THRESHOLD = float(os.environ.get("JARVIS_WAKE_THRESHOLD", "0.5"))
 
 # Only llama.cpp gets these; a hosted API may reject them. Temperature 0 makes
 # tool choice repeatable: at 0.7 the model sometimes asked to shut the PC down

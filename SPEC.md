@@ -93,7 +93,10 @@ Each tool is a plain function that returns a short string for the LLM to work in
 ### `wake`
 
 - `wait_for_wake_word() -> None` streams the microphone in 80 ms chunks into openWakeWord's `hey_jarvis` model and returns when the score is ≥ 0.5 (threshold configurable).
-- It shares the microphone with `stt` one after the other, never at the same time (wake → stt → back to wake).
+- It shares the microphone with `stt` one after the other, never at the same time (wake → stt → back to wake). The microphone is released when the function returns, even on an error.
+- Every wait builds a fresh model (0.2 s). openWakeWord's `reset()` only clears the score history, not the audio buffers, so a reused model would fire again at once on the "hey jarvis" it just heard.
+- Measured on synthetic speech (Supertonic, all 10 voices): "hey jarvis" scored 0.98-1.00 in 20 of 20 tries, also when a command followed it. 4 minutes of ordinary English and Indonesian speech and 2 minutes each of room and loud noise gave no trigger (max score 0.00 and 0.01). "Hey Marvin/Google/Siri/Davis" never trigger; anything containing "Jarvis" does, and "Hey Travis" 6 times in 10. Cost is 2.3 ms per 80 ms block (about 3% of one core). Scores are close to 0 or 1, so the 0.5 threshold is not delicate. The silero noise gate (`vad_threshold`) was not needed.
+- Real-microphone numbers (4 of 5 hits, at most 1 false trigger in 30 minutes) still have to be measured with `scripts/smoke_audio.py wake`.
 
 ### `app`
 

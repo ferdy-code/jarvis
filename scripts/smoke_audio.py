@@ -2,6 +2,7 @@
 
 uv run python scripts/smoke_audio.py mic            # live microphone level meter
 uv run python scripts/smoke_audio.py stt            # say 5 commands, see the text
+uv run python scripts/smoke_audio.py wake           # say "hey jarvis"; Ctrl+C to stop
 uv run python scripts/smoke_audio.py tts            # configured voice (JARVIS_VOICE)
 uv run python scripts/smoke_audio.py tts F1 M3      # compare chosen voices
 uv run python scripts/smoke_audio.py tts all        # audition all 10 voices
@@ -12,7 +13,7 @@ import time
 
 import numpy as np
 
-from jarvis import config, stt, tts
+from jarvis import config, stt, tts, wake
 
 SAMPLES = {
     "en": "Hello, I am Jarvis. It is Saturday, 10 October 2026, 18:16. "
@@ -74,15 +75,35 @@ def listen_rounds(rounds: int = 5) -> None:
         print(f"  heard ({lang}): {text!r}" if text else "  heard nothing")
 
 
+def listen_for_wake_word() -> None:
+    """Count detections: say it 5 times for the hit rate, or leave it running
+    30 minutes in a quiet room and count the ones you did not cause."""
+    print(f"Say 'hey jarvis' (threshold {config.WAKE_THRESHOLD}). Ctrl+C to stop.")
+    count = 0
+    start = time.time()
+    try:
+        while True:
+            wake.wait_for_wake_word()
+            count += 1
+            minutes = (time.time() - start) / 60
+            print(f"WAKE #{count} after {minutes:.1f} min", flush=True)
+            time.sleep(1)  # a fresh model each time, so give the sentence time to end
+    except KeyboardInterrupt:
+        print()
+        print(f"{count} detections in {(time.time() - start) / 60:.1f} min")
+
+
 parser = argparse.ArgumentParser(
     description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
 )
-parser.add_argument("check", choices=["tts", "stt", "mic"])
+parser.add_argument("check", choices=["tts", "stt", "mic", "wake"])
 parser.add_argument("voices", nargs="*")
 args = parser.parse_args()
 if args.check == "tts":
     audition(args.voices)
 elif args.check == "stt":
     listen_rounds()
+elif args.check == "wake":
+    listen_for_wake_word()
 else:
     meter()
