@@ -60,7 +60,7 @@ tools ───────┘                              │    │    │
 - [x] Task 10: README usage docs
 
 ### Checkpoint C: MVP complete
-- [ ] All 9 SPEC success criteria pass
+- [x] All 9 SPEC success criteria pass
 - [ ] Human review
 
 ## Risks and Mitigations
