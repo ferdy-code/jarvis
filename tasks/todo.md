@@ -111,7 +111,7 @@ Plan: [plan.md](plan.md) · Spec: [SPEC.md](../SPEC.md)
 
 ## Phase 2: Speaking Jarvis
 
-### Task 6: Spoken replies with Supertonic 3 ✅ (code done; the listening check and voice choice are left to the user)
+### Task 6: Spoken replies with Supertonic 3 ✅ (voice M2 chosen by the user)
 **Description:** `tts.speak(text, lang)` loads Supertonic once, synthesizes speech in `en` or `id`, and plays it with sounddevice. `app` speaks every reply in voice mode, uses the last-known language for typed turns, and falls back to text only if TTS fails to load. List the available voice presets and pick one with the user.
 
 **Acceptance criteria:**

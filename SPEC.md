@@ -76,7 +76,7 @@ Each tool is a plain function that returns a short string for the LLM to work in
 
 ### `tts`
 
-- `speak(text: str, lang: str) -> None` uses Supertonic `TTS(auto_download=True)` with a preset voice (default `M1`, configurable), and plays the audio through `sounddevice`. It blocks until playback finishes.
+- `speak(text: str, lang: str) -> None` uses Supertonic `TTS(auto_download=True)` with a preset voice (default `M2`, configurable), and plays the audio through `sounddevice`. It blocks until playback finishes.
 - `lang` must be `en` or `id`. Anything else falls back to `en`.
 - The model is loaded once and stays in memory. Voices: `M1`-`M5`, `F1`-`F5`; output is 44.1 kHz. First run downloads about 385 MB to `~/.cache/supertonic3`.
 - For `id`, numbers are spelled out as Indonesian words before synthesis (`spell_numbers_id`). Supertonic misreads Indonesian digits ("85 persen" was heard as "25%", "18:15" as "12.15"); written as words they were heard correctly 8 times out of 8. English digits are read fine.
@@ -113,7 +113,7 @@ Plain module-level constants, read once from environment variables with defaults
 | `JARVIS_MODEL` | `Qwen3.5-4B-Q4_K_M` |
 | `JARVIS_API_KEY` | `llamastash` (stub, ignored by the loopback proxy) |
 | `JARVIS_WHISPER_MODEL` | `small` |
-| `JARVIS_VOICE` | `M1` |
+| `JARVIS_VOICE` | `M2` |
 | `JARVIS_WAKE_THRESHOLD` | `0.5` |
 
 Switching to OpenAI means setting `JARVIS_BASE_URL=https://api.openai.com/v1`, `JARVIS_MODEL=<model>` and `JARVIS_API_KEY=<key>`, with no code changes. `enable_thinking` is sent only when the base URL is local.
@@ -234,7 +234,7 @@ TOOLS: dict[str, Tool] = {
 
 ## Open Questions
 
-1. **Supertonic voice:** `M1` is the only preset name confirmed so far. Should Jarvis sound male or female? I'll list the available presets when building `tts`.
+1. ~~**Supertonic voice**~~ **Resolved (Task 6):** the user chose `M2` after auditioning the presets (`M1`-`M5`, `F1`-`F5`).
 2. **Whisper size:** `small` is the starting point. If Indonesian accuracy is poor, try `medium` (more VRAM, slower). This gets decided after the smoke test.
 3. ~~**Python 3.14 wheels**~~ **Resolved (Task 1):** every dependency installs and imports on Python 3.14, so no fallback is needed. `ctranslate2` sees the GPU (CUDA, float16 supported). `onnxruntime` is CPU-only, which is fine for the wake word.
 4. **Wake-word chime:** a short beep after "hey jarvis" so you know it's listening. I've assumed yes, using a generated tone with no audio file.
