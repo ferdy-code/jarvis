@@ -29,20 +29,23 @@ and it keeps every existing guarantee. B builds on it once A is in daily use.
 
 ## Key Assumptions to Validate (before writing feature code)
 
-- [ ] **Autoplay:** Firefox starts a YouTube Music track with sound when Jarvis opens it.
-  Firefox blocks audible autoplay by default. Not tested yet: the user was already playing
-  music in Firefox, and a test would replace their song. Windows' audio meter (`pycaw`) shows
-  silently whether Firefox is playing (it read active, peak 0.04-0.08 while they listened),
-  so the test needs no ears. If it is blocked, add a Firefox site exception or send the
-  "play" key.
+- [x] **Autoplay: BLOCKED by default** (tested 2026-10-10). With everything paused, a track
+  opened by its link (`music.youtube.com/watch?v=ID`) stayed silent for 25 s; the tab showed
+  only "YouTube Music". Firefox does not let a page play sound until the user has clicked on
+  it, and a page opened by another program has had no click. Measured with Windows' audio
+  meter (`pycaw`), no ears needed. Fix, once, by the user: allow audio and video for
+  `music.youtube.com` (Firefox Settings > Privacy & Security > Permissions > Autoplay >
+  Settings). Then re-run the test. A media key cannot start the new track: it goes to the
+  most recent media session, which is the old tab.
 - [~] **Window focus:** partly confirmed (2026-10-10). A background Python program can bring
   Firefox to the front (`SetForegroundWindow` after a tap of Alt), and the terminal gets the
   focus back afterwards. Page Down scrolled a test page and Ctrl+W closed a tab. Not
   confirmed: a plain letter key ("k" never arrived), Alt+Left (Back) and Ctrl+Tab. A second
   test tab did not open as a separate tab, so the tab-switching result is inconclusive.
-  Decision: do not depend on focus for music. Use the **media keys** (play/pause, next,
-  previous), which Windows delivers to the browser's media session without any window
-  focus. Untested: it would pause the user's music for a few seconds. Scroll (Page Down /
+  Decision: do not depend on focus for music. Use the **media keys**, which Windows delivers to
+  the browser's media session without any window focus. **Confirmed:** Play/Pause stopped the
+  user's music in 0.2 s, resumed it, and stopped it again (measured with the audio meter).
+  Next and previous track use the same mechanism but were not pressed. Scroll (Page Down /
   Page Up) can stay focus-based because it is confirmed.
 - [x] **Finding the track:** confirmed (2026-10-10). `ytmusicapi` (searched with
   `filter="songs"`, no login) resolved 9 of 9 named songs, English and Indonesian, to the
