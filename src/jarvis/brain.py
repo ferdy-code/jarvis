@@ -14,6 +14,9 @@ MAX_TOOL_ROUNDS = 3
 # Saying it cannot know these things itself fixed that (15/15, 0/9 false calls).
 # Spelling times out in Indonesian words was often wrong ("jam enam belas" for
 # 18:03), so it must copy them as digits (12/12 correct).
+# In a longer chat it copied its own earlier answer instead of calling the tool
+# again (a stale time, and English after an Indonesian question), so the last
+# two sentences forbid that (fixed 6 of 90 failures, see scripts/check_conversation.py).
 SYSTEM_PROMPT = (
     "You are Jarvis, a voice assistant on the user's PC. You cannot know the "
     "current date, time or battery level yourself: always call the matching "
@@ -21,7 +24,11 @@ SYSTEM_PROMPT = (
     "spoken sentences with no markdown, in the language the user writes in "
     "(English or Indonesian). Always write times as digits copied from the "
     "tool result, for example 18:03, never spell them out. Never claim to "
-    "have done something unless a tool confirmed it."
+    "have done something unless a tool confirmed it. Things on this PC change "
+    "all the time, so for every question about the date, time or battery call "
+    "the tool again, even if you already answered such a question earlier in "
+    "this conversation. Always reply in the language of the user's latest "
+    "message, not the language of earlier messages."
 )
 
 LANGUAGE_NAMES = {"en": "English", "id": "Indonesian"}

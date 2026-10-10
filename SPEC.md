@@ -196,6 +196,7 @@ TOOLS: dict[str, Tool] = {
   - `tests/test_tools.py`: each tool with the OS calls monkeypatched (pycaw, psutil, `subprocess.run`). Checks argument validation and the `"error: …"` path.
   - `tests/test_brain.py`: `Brain` with a fake client that returns scripted responses. Covers a plain answer, a single tool call, a dangerous tool confirmed or refused, the 3-round tool-call cap, history trimming, and the server-down message.
 - **Manual checks** (listed in the plan per task): `scripts/smoke_audio.py` for mic, Whisper and TTS; a real wake-word session; a real volume and lock run.
+- **Model behaviour check:** `uv run python scripts/check_conversation.py` (needs LlamaStash) runs multi-turn English/Indonesian chats against the real model with a clock that moves on every call, so a stale or wrong-language answer fails. Run it after any change to `SYSTEM_PROMPT` or the tool descriptions. The prompt wording is load-bearing with the 4B model and unit tests cannot see it.
 - No coverage percentage target. Every function in `tools.py` and `brain.py` has at least one test.
 - `uv run pytest -q` and `uv run ruff check` must pass before each commit.
 
