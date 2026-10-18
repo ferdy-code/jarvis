@@ -84,3 +84,75 @@ Tasks 6, 7 and 8 are independent once Task 2 is done. They're kept sequential be
 - Supertonic voice (male or female, which preset): Task 6
 - Whisper `small` vs `medium` for Indonesian: Task 7
 - Python 3.14 vs 3.12: Task 1
+
+---
+
+# Implementation Plan: Memory and Web Guard
+
+Source: [docs/SPEC-memory.md](../docs/SPEC-memory.md) (draft 2026-10-18) · Tasks: [todo.md](todo.md#memory-and-web-guard) (Tasks 16-21)
+
+## Overview
+
+Three parts, each one usable by itself: **A** saves the last turns so they survive a restart, **B** adds explicit "remember / forget" facts that are shown to the model in every prompt, and **C** stops `web_lookup page` from fetching private-network addresses, including through redirects. Everything uses the standard library. `JARVIS_DB_FILE=off` gives exactly today's behaviour.
+
+## Dependency Graph
+
+```
+db.py + config.DB_FILE (16) ──► history.py + Brain(history) (17) ──► facts.py + memory tools (18) ──► facts in prompt (19) ──► --reset-memory + docs (20)
+
+netguard.py + web.page (21)        independent; may run in parallel with 16
+```
+
+## Architecture Decisions
+
+- **Numbering continues the existing list:** spec Task 1 = 16, 2 = 17, 3 = 18 + 19 (split, as the spec allows for L), 4 = 20, 5 = 21.
+- **Spec Task 3 is split by risk, not by module.** Task 18 adds the two tools and their descriptions and runs `check_tools.py`. Every new tool has shifted older behaviour, so false `remember`/`forget` calls are the most likely failure and get found first. Task 19 then adds the facts block to the prompt and runs `check_conversation.py`, the multi-turn facts case and the latency check.
+- **Each task updates its own docs** (Boundaries: "README, SPEC.md and CLAUDE.md in the same task"). Task 20 adds the reset command, the README Safety section and a final pass so the three documents match the code.
+- **`brain.py` gets objects, not storage:** `history` (load/save) and `facts` (a callable). The unit tests use fakes and no sqlite.
+- **`refused_after` needs the start of the current turn:** `ask` passes `start` to `_converse` and then to `_execute`, which checks `_tools_used(messages[start:])`.
+- **One stop per task** so the user can run the real-model checks on this PC before the next one (spec "How to run this").
+
+## Task List
+
+### Prerequisite
+- [ ] The uncommitted tracing change (`trace.py`, and edits to `app.py`, `brain.py`, `config.py`, `stt.py`, `tts.py`, tests, README) is committed. Then every task-worker commit holds only its own task's files.
+
+### Phase A: Saved history
+- [ ] Task 16: Database foundation (`db.py`, `JARVIS_DB_FILE`)
+- [ ] Task 17: Saved history across restarts
+
+### Checkpoint A
+- [ ] `uv run pytest -q` and ruff pass; a restart keeps the conversation (typed, EN + ID)
+- [ ] Human review
+
+### Phase B: Remembered facts
+- [ ] Task 18: Facts store and the remember/forget tools (tool choice checked)
+- [ ] Task 19: Facts shown to the model (conversation checks, latency)
+- [ ] Task 20: `--reset-memory` and the memory docs
+
+### Checkpoint B
+- [ ] `check_tools.py 3` reads `wrong: 0 of <total>`, `check_conversation.py 3` reads 75/75 and 75/75, each run twice
+- [ ] Spec success criteria 1-6 and 8 pass
+- [ ] Human review
+
+### Phase C: Web guard (parallel with Phase A)
+- [ ] Task 21: Private-address guard for `web_lookup page`
+
+### Checkpoint: Complete
+- [ ] All 9 spec success criteria pass
+- [ ] Human review
+
+## Risks and Mitigations
+
+| Risk | Impact | Mitigation |
+|---|---|---|
+| `remember`/`forget` get called for ordinary questions ("how do I forget a wifi network"), or push older tools wrong again | High | Task 18 runs `check_tools.py` with negative cases before the prompt changes. Fallback (spec Open Question 4): drop `forget` as a tool |
+| The facts block pulls the reply into the wrong language, or the model mentions facts when nobody asked | Med | Block goes before `SYSTEM_PROMPT`, language sentence stays last; Task 19 adds the multi-turn facts case |
+| Saved turns carry stale tool results across a restart | Med | 12-hour age cut, clock/battery turns never saved; tune in daily use (Open Question 1) |
+| Typed and voice threads write the database at once | Low | One connection per operation, and sqlite's file lock; `ask` is already behind the Brain lock |
+| Parallel task-workers (16 and 21) commit over each other | Low | No shared files except possibly SPEC.md; each worker stages only its own files |
+| DNS rebinding gets past the guard | Low | Accepted residual risk, written in SPEC.md (Task 21) |
+
+## Open Questions
+
+From the spec, unresolved: the 12-hour age (1), the 30 x 200 cap (2), and the possible `forget` fallback (4). Guard override (3): no setting, as recommended.

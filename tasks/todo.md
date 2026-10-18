@@ -291,3 +291,116 @@ Plan: [plan.md](plan.md) · Spec: [SPEC.md](../SPEC.md)
 3. A "not found" result made the main model open Google uninvited and write a tool call as text. The result now says to call no more tools, and `Brain` replaces a reply containing `<tool_call>` with a plain apology.
 4. The 4B reader once mixed two articles into a wrong date; "never combine facts from different articles" fixed it. The main model dropped the source's name until the result told it to keep it.
 **Files:** `src/jarvis/web.py`, `src/jarvis/tools.py`, `src/jarvis/brain.py`, `scripts/check_tools.py`, `tests/test_web.py`, `tests/test_brain.py`, `README.md`, `SPEC.md`, `docs/ideas/jarvis-browser.md`
+
+---
+
+## Memory and web guard
+
+Spec: [docs/SPEC-memory.md](../docs/SPEC-memory.md) · Plan: [plan.md](plan.md#implementation-plan-memory-and-web-guard). Spec Task 1 = 16, 2 = 17, 3 = 18 + 19, 4 = 20, 5 = 21. Tasks 16 and 21 are independent and may run in parallel. After each task, stop so the user can run the real-model checks on this PC.
+
+**Before Task 16:** commit the pending tracing change (`uv run pytest tests/test_trace.py -q` passes) so each task's commit holds only its own files.
+
+### Task 16: Database foundation
+**Description:** `db.connect(path)` opens or creates the SQLite file with schema v1 (`turns`, `facts`) and refuses a newer `user_version`. `config.DB_FILE` reads `JARVIS_DB_FILE` (default `data/jarvis.sqlite3`; `off` or empty gives `None`), with the same pattern as `TRACE_FILE`. Nothing uses the database yet.
+
+**Acceptance criteria:**
+- [ ] The schema is created once and data survives reopening; a database with `user_version` 2 raises a clear error and is not changed
+- [ ] `JARVIS_DB_FILE=off` and `JARVIS_DB_FILE=` both give `config.DB_FILE is None`
+- [ ] README settings table has the `JARVIS_DB_FILE` row; `.gitignore` has `data/`
+
+**Verification:**
+- [ ] `uv run pytest -q tests/test_db.py tests/test_readme.py`, then the full `uv run pytest -q` and `uv run ruff check src tests`
+- [ ] Manual: `uv run python -c "from jarvis import db; db.connect('data/x.sqlite3')"` creates the file; `git status` does not show `data/`
+
+**Dependencies:** none (commit the tracing change first)
+**Files:** `src/jarvis/db.py`, `src/jarvis/config.py`, `tests/test_db.py`, `README.md`, `.gitignore`
+**Scope:** S
+
+### Task 17: Saved history across restarts
+**Description:** `History(path)` saves each turn as JSON and loads the newest ones that are less than 12 hours old. `Brain` takes `history=`, loads at start and saves after each turn, except turns using `FORGOTTEN_TOOLS` (not kept at all) and `UNSAVED_TOOLS = {"web_lookup"}` (kept for this run, never written). A failing load or save prints one line and never breaks `ask`. `app.main` wires it in unless `DB_FILE` is `None`.
+
+**Acceptance criteria:**
+- [ ] Round-trip keeps Indonesian text and tool-call messages; oldest first; `limit`, the 12-hour cut, pruning to `keep=100` and a skipped corrupt row are all tested
+- [ ] A `web_lookup` turn stays in `brain.history` but is not in the database; a clock turn is in neither; a raising `load`/`save` does not break `ask`
+- [ ] Manual (typed, English and Indonesian): chat, exit, restart, then "what did I ask you before?" is answered from the saved turns
+
+**Verification:**
+- [ ] `uv run pytest -q tests/test_history.py tests/test_brain.py tests/test_app.py`, then the full suite and ruff
+- [ ] `uv run python scripts/check_conversation.py 3` still reads 75/75 and 75/75
+- [ ] Manual: the restart check above
+
+**Dependencies:** 16
+**Files:** `src/jarvis/history.py`, `src/jarvis/brain.py`, `src/jarvis/app.py`, `tests/test_history.py`, `tests/test_brain.py`, `SPEC.md`
+**Scope:** M
+
+### Task 18: Facts store and the remember/forget tools
+**Description:** `Facts(path)` with `all`, `add` and `remove`, plus the rules: 3-200 characters, at most 30 facts, a 3-character minimum for `remove`, and `looks_secret`. `memory_tools.build(facts)` returns `remember` and `forget`, both `refused_after=frozenset({"web_lookup"})`. `Tool` gets `refused_after`; `_converse`/`_execute` know where the current turn starts and refuse those tools after `web_lookup` in the same turn. The tools are merged in `app.main`. This task runs the tool-choice check before the prompt changes, because a new tool has shifted older behaviour every time so far.
+
+**Acceptance criteria:**
+- [ ] Unit tests cover every `Facts` rule and every `looks_secret` case ("pin" inside another word is allowed), and every result string of both tools
+- [ ] In a turn that called `web_lookup`, both tools return `error: not allowed in a turn that read web content` and the database does not change; in other turns they run
+- [ ] `check_tools.py` has `remember`/`forget` cases in both languages and negative cases that call nothing ("how do I remember a password", "what is RAM", "how do I forget a wifi network", plain chat); `check_tools.py 3` reads `wrong: 0 of <new total>` twice
+
+**Verification:**
+- [ ] `uv run pytest -q tests/test_facts.py tests/test_memory_tools.py tests/test_brain.py`, then the full suite and ruff
+- [ ] `PYTHONIOENCODING=utf-8 uv run python scripts/check_tools.py 3`, run twice
+- [ ] Manual (typed): "remember that my cat is called Mochi", then "remember my password is hunter2" (refused), then "forget the cat"
+
+**Dependencies:** 17
+**Files:** `src/jarvis/facts.py`, `src/jarvis/memory_tools.py`, `src/jarvis/tools.py`, `src/jarvis/brain.py`, `src/jarvis/app.py`, `tests/test_facts.py`, `tests/test_memory_tools.py`, `scripts/check_tools.py`
+**Scope:** M (more files than the 5-file guide, but most are small and new)
+
+### Task 19: Facts shown to the model
+**Description:** `Brain(facts=...)` takes a callable. `_system_prompt(lang, facts)` puts the labelled facts block before `SYSTEM_PROMPT` so the language sentence stays last. With no facts the prompt is byte-identical to today's. `app.main` passes `facts=facts.all`.
+
+**Acceptance criteria:**
+- [ ] A test shows the no-facts prompt equals the old prompt exactly, and with facts the block comes first and the prompt still ends with the language sentence
+- [ ] `check_conversation.py` has a multi-turn case with 3 stored facts (1 Indonesian, 2 English): questions about each are answered from the facts with no tool call and in the question's language, and unrelated questions do not mention them. `check_conversation.py 3` still reads 75/75 and 75/75
+- [ ] Manual: "remember that my cat is called Mochi", restart, then "what is my cat called?" is answered correctly, in English and in Indonesian. With 30 facts, the time to the first reply is no more than 0.3 s slower (from `logs/trace.jsonl`)
+
+**Verification:**
+- [ ] `uv run pytest -q tests/test_brain.py`, then the full suite and ruff
+- [ ] `PYTHONIOENCODING=utf-8 uv run python scripts/check_conversation.py 3` and `check_tools.py 3`, each run twice
+- [ ] Manual: the Mochi restart check and the latency comparison
+
+**Dependencies:** 18
+**Files:** `src/jarvis/brain.py`, `src/jarvis/app.py`, `tests/test_brain.py`, `scripts/check_conversation.py`, `SPEC.md`
+**Scope:** S
+
+### Task 20: `--reset-memory` and the memory docs
+**Description:** `uv run jarvis --reset-memory` asks `Delete all remembered facts and saved history? [y/N]` (via `is_yes`), empties both tables only after a clear yes, prints the result and exits without loading any model. Also: the README Safety section (what is stored, in plain text, only on this PC, and how to wipe it), the SPEC.md sections for `history`, `facts`, `memory_tools` and the prompt-injection rules, and the CLAUDE.md architecture notes.
+
+**Acceptance criteria:**
+- [ ] A "y" empties both tables; "n", an empty answer or anything unclear changes nothing; no model, client or audio is loaded (test_app)
+- [ ] With `config.DB_FILE = None`, no file is created and no memory tool is offered (test_app)
+- [ ] README, SPEC.md and CLAUDE.md match the code: every new module, setting and command is named, and nothing is documented that the code does not do
+
+**Verification:**
+- [ ] `uv run pytest -q tests/test_app.py tests/test_readme.py`, then the full suite and ruff
+- [ ] Manual: `uv run jarvis --reset-memory`, answer `n` (data stays), run again and answer `y` (both tables empty); `JARVIS_DB_FILE=off uv run jarvis --no-voice` creates no file
+
+**Dependencies:** 19
+**Files:** `src/jarvis/app.py`, `tests/test_app.py`, `README.md`, `SPEC.md`, `CLAUDE.md`
+**Scope:** S
+
+### Task 21: Private-address guard for `web_lookup page`
+**Description:** `netguard.check_public(url)` resolves the host and raises `BlockedAddress` if any resolved address is not `is_global` (IPv4-mapped IPv6 is unwrapped first). A name that does not resolve is not reported as blocked. `GuardedRedirectHandler` checks every redirect target. `web.page()` checks first and fetches through the guarded opener; `news`/`wiki` are unchanged. SPEC.md: the Limits line is reversed with the reason, and DNS rebinding is written down as the known residual risk.
+
+**Acceptance criteria:**
+- [ ] With `socket.getaddrinfo` patched: `127.0.0.1`, `10.x`, `172.16.x`, `192.168.x`, `169.254.169.254`, `100.64.x`, `::1`, `fc00::1`, `::ffff:127.0.0.1` and a name with one public and one private address are blocked; a public address is allowed; an unresolvable name is not blocked
+- [ ] A redirect to a private address is refused and one to a public address is followed; `page()` returns `error: could not read that page (blocked: that address is on a private network). Tell the user so and call no more tools.`; `web.py` still does not import `browser`
+- [ ] Manual: `web_lookup page` on `http://127.0.0.1:11435/v1/models` is refused with a spoken reason; a news page and Wikipedia still work; a public URL that redirects to a local `127.0.0.1` test server is refused
+
+**Verification:**
+- [ ] `uv run pytest -q tests/test_netguard.py tests/test_web.py`, then the full suite and ruff
+- [ ] `PYTHONIOENCODING=utf-8 uv run python scripts/check_tools.py 3` still reads `wrong: 0 of 84` (no description changed; this confirms nothing shifted)
+- [ ] Manual: the three checks above
+
+**Dependencies:** none (parallel with 16)
+**Files:** `src/jarvis/netguard.py`, `src/jarvis/web.py`, `tests/test_netguard.py`, `tests/test_web.py`, `SPEC.md`
+**Scope:** M
+
+## Checkpoint: Memory and web guard complete
+- [ ] All 9 success criteria in `docs/SPEC-memory.md` pass
+- [ ] `check_tools.py 3` 0 wrong and `check_conversation.py 3` 75/75 and 75/75, each repeated
+- [ ] Human review
