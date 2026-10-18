@@ -6,13 +6,19 @@ Run it after changing SYSTEM_PROMPT or the tool descriptions: the wording is
 load-bearing and unit tests cannot see it. The clock tool is replaced by one
 that moves forward on every call, so a reply is only fresh if the model called
 the tool again; copying an earlier answer shows up as a stale minute.
+
+It runs the scenarios twice, without and with three stored facts in the prompt, then
+asks about the facts. The memory tools are harmless recorders over a throwaway store.
 """
 
 import sys
+import tempfile
+from pathlib import Path
 
-from jarvis import config
+from jarvis import config, memory_tools
 from jarvis.app import openai
 from jarvis.brain import Brain
+from jarvis.facts import Facts
 from jarvis.tools import TOOLS, Tool
 from jarvis.tts import guess_lang
 
@@ -71,6 +77,30 @@ SCENARIOS = {
     ],
 }
 
+FACTS = [
+    "Kucingku namanya Mochi",
+    "My sister's name is Rina",
+    "I work night shifts at the hospital",
+]
+
+# Each question is (text, language of the question, words one of which must be in the
+# reply). The reply must come from the facts alone: no tool may be called.
+FACT_QUESTIONS = [
+    ("what is my cat called?", "en", ("mochi",)),
+    ("kucingku namanya siapa?", "id", ("mochi",)),
+    ("what is my sister's name?", "en", ("rina",)),
+    ("siapa nama saudara perempuanku?", "id", ("rina",)),
+    ("what kind of shifts do I work?", "en", ("night", "malam")),
+    ("aku kerja shift apa ya?", "id", ("malam", "night")),
+]
+# Asked in a fresh chat each: a chat that just answered about Mochi may mention it.
+UNRELATED_QUESTIONS = [
+    ("what is the capital of Japan?", "en"),
+    ("ceritakan lelucon pendek", "id"),
+    ("how many days are in a week?", "en"),
+]
+FACT_WORDS = ("mochi", "rina", "hospital", "rumah sakit")
+
 client = openai.OpenAI(base_url=config.BASE_URL, api_key=config.API_KEY, max_retries=0)
 minute = START_MINUTE
 tool_calls: list[str] = []
@@ -93,7 +123,10 @@ def harmless(name):
 
 def make_tools():
     tools = {}
-    for name, tool in TOOLS.items():
+    # The same tool set as the real app; the store is never opened, only named.
+    with tempfile.TemporaryDirectory() as folder:
+        memory = memory_tools.build(Facts(Path(folder) / "facts.sqlite3"))
+    for name, tool in {**TOOLS, **memory}.items():
         fn = clock if name == "get_datetime" else harmless(name)
         tools[name] = Tool(fn=fn, schema=tool.schema, dangerous=tool.dangerous)
     return tools
@@ -108,28 +141,85 @@ def passed(check, reply) -> bool:
     return True
 
 
-total = right_data = right_language = 0
-failures = []
-for name, turns in SCENARIOS.items():
+def new_brain(facts):
+    return Brain(
+        client,
+        config.MODEL,
+        tools=make_tools(),
+        extra_body=config.EXTRA_BODY,
+        facts=(lambda: facts) if facts else None,
+    )
+
+
+def run_scenarios(facts):
+    global minute
+    total = right_data = right_language = 0
+    failures = []
+    for name, turns in SCENARIOS.items():
+        for _ in range(SAMPLES):
+            minute = START_MINUTE
+            brain = new_brain(facts)
+            for question, language, check in turns:
+                tool_calls.clear()
+                reply = brain.ask(question)
+                total += 1
+                ok_data = passed(check, reply)
+                ok_language = guess_lang(reply) == language
+                right_data += ok_data
+                right_language += ok_language
+                if not (ok_data and ok_language):
+                    failures.append(
+                        f"{name}: {question!r} tools={tool_calls or '-'} -> {reply!r}"
+                    )
+    return (
+        f"fresh data {right_data}/{total}, reply language {right_language}/{total}",
+        failures,
+    )
+
+
+def run_fact_questions():
+    right = language = clean = 0
+    total_right = total_clean = 0
+    failures = []
     for _ in range(SAMPLES):
-        minute = START_MINUTE
-        brain = Brain(
-            client, config.MODEL, tools=make_tools(), extra_body=config.EXTRA_BODY
-        )
-        for question, language, check in turns:
+        brain = new_brain(FACTS)
+        for question, lang, words in FACT_QUESTIONS:
             tool_calls.clear()
             reply = brain.ask(question)
-            total += 1
-            ok_data = passed(check, reply)
-            ok_language = guess_lang(reply) == language
-            right_data += ok_data
-            right_language += ok_language
-            if not (ok_data and ok_language):
+            total_right += 1
+            ok = any(word in reply.lower() for word in words) and not tool_calls
+            right += ok
+            language += guess_lang(reply) == lang
+            if not ok or guess_lang(reply) != lang:
                 failures.append(
-                    f"{name}: {question!r} tools={tool_calls or '-'} -> {reply!r}"
+                    f"facts: {question!r} tools={tool_calls or '-'} -> {reply!r}"
                 )
+        for question, lang in UNRELATED_QUESTIONS:
+            tool_calls.clear()
+            reply = new_brain(FACTS).ask(question)
+            total_clean += 1
+            ok = not any(word in reply.lower() for word in FACT_WORDS)
+            clean += ok
+            language += guess_lang(reply) == lang
+            if not ok or guess_lang(reply) != lang:
+                failures.append(f"unrelated: {question!r} -> {reply!r}")
+    total_language = total_right + total_clean
+    line = (
+        f"facts: right {right}/{total_right}, reply language {language}/{total_language}, "
+        f"unrelated clean {clean}/{total_clean}"
+    )
+    return line, failures
 
-print(f"fresh data {right_data}/{total}, reply language {right_language}/{total}")
-for failure in failures[:8]:
-    print("  FAIL", failure)
-sys.exit(1 if failures else 0)
+
+all_failures = []
+for label, run in (
+    ("", lambda: run_scenarios(None)),
+    ("with facts: ", lambda: run_scenarios(FACTS)),
+    ("", run_fact_questions),
+):
+    line, failures = run()
+    print(label + line)
+    for failure in failures[:8]:
+        print("  FAIL", failure)
+    all_failures += failures
+sys.exit(1 if all_failures else 0)

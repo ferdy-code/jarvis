@@ -359,18 +359,20 @@ Spec: [docs/SPEC-memory.md](../docs/SPEC-memory.md) · Plan: [plan.md](plan.md#i
 **From Task 18:** `check_tools.py 3` flips between runs at temperature 0 ("news today" calling `get_datetime` first), so run it at least 4 times, not twice.
 
 **Acceptance criteria:**
-- [ ] A test shows the no-facts prompt equals the old prompt exactly, and with facts the block comes first and the prompt still ends with the language sentence
-- [ ] `check_conversation.py` has a multi-turn case with 3 stored facts (1 Indonesian, 2 English): questions about each are answered from the facts with no tool call and in the question's language, and unrelated questions do not mention them. `check_conversation.py 3` still reads 75/75 and 75/75
+- [x] A test shows the no-facts prompt equals the old prompt exactly, and with facts the block comes first and the prompt still ends with the language sentence
+- [x] `check_conversation.py` has a multi-turn case with 3 stored facts (1 Indonesian, 2 English): questions about each are answered from the facts with no tool call and in the question's language, and unrelated questions do not mention them. `check_conversation.py 3` still reads 75/75 and 75/75
 - [ ] Manual: "remember that my cat is called Mochi", restart, then "what is my cat called?" is answered correctly, in English and in Indonesian. With 30 facts, the time to the first reply is no more than 0.3 s slower (from `logs/trace.jsonl`)
 
 **Verification:**
-- [ ] `uv run pytest -q tests/test_brain.py`, then the full suite and ruff
-- [ ] `PYTHONIOENCODING=utf-8 uv run python scripts/check_conversation.py 3` and `check_tools.py 3`, each run twice
+- [x] `uv run pytest -q tests/test_brain.py`, then the full suite and ruff
+- [x] `PYTHONIOENCODING=utf-8 uv run python scripts/check_conversation.py 3` and `check_tools.py 3`, each run twice
 - [ ] Manual: the Mochi restart check and the latency comparison
 
 **Dependencies:** 18
 **Files:** `src/jarvis/brain.py`, `src/jarvis/app.py`, `tests/test_brain.py`, `scripts/check_conversation.py`, `SPEC.md`
 **Scope:** S
+
+**Result (not done):** 370 tests pass; ruff clean. `check_conversation.py 3`, 3 runs, each: `fresh data 75/75, reply language 75/75` / `with facts: fresh data 75/75, reply language 75/75` / `facts: right 18/18, reply language 27/27, unrelated clean 9/9` (the first, label-only run read `facts: right 16/18`: the model called `remember` on "what kind of shifts do I work?"; fixed by adding "answer questions about it without calling a tool" to the label). `check_tools.py 3` x4: `wrong: 0 of 126` each time. Latency (timing `Brain.ask` directly, "how are you?", 7 alternating runs): median 0.394 s with no facts, 0.535 s with 30 facts, +0.141 s. Manual (typed, throwaway database): remember, then in a new process "what is my cat called?" -> "Your cat is called Mochi.", "kucingku namanya siapa?" -> "Kucing Anda bernama Mochi." (both right). After "forget the cat" the facts table was empty, but "what is my cat called?" in a new process still answered "Your cat is still named Mochi.": the saved ordinary turns from run 2 ("what is my cat called?" / "Your cat is called Mochi.") are loaded from history. With the turns table emptied it said it did not know. The label cannot help because with no facts there is no block. The manual box and the Task 19 check stay open until forgetting also covers those turns.
 
 ### Task 20: `--reset-memory` and the memory docs
 **Description:** `uv run jarvis --reset-memory` asks `Delete all remembered facts and saved history? [y/N]` (via `is_yes`), empties both tables only after a clear yes, prints the result and exits without loading any model. Also: the README Safety section (what is stored, in plain text, only on this PC, and how to wipe it), the SPEC.md sections for `history`, `facts`, `memory_tools` and the prompt-injection rules, and the CLAUDE.md architecture notes.

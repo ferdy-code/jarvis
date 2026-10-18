@@ -220,9 +220,10 @@ def main() -> None:
         speak = load_speaker()
         listening = load_microphone()
 
-    tools = TOOLS
+    tools, facts = TOOLS, None
     if config.DB_FILE:
-        tools = {**TOOLS, **memory_tools.build(Facts(config.DB_FILE))}
+        store = Facts(config.DB_FILE)
+        tools, facts = {**TOOLS, **memory_tools.build(store)}, store.all
 
     assistant = Assistant(
         make_brain=lambda confirm: Brain(
@@ -232,6 +233,7 @@ def main() -> None:
             confirm=confirm,
             extra_body=config.EXTRA_BODY,
             history=History(config.DB_FILE) if config.DB_FILE else None,
+            facts=facts,
         ),
         speak=speak,
         listen=stt.listen,
