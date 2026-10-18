@@ -355,6 +355,8 @@ Spec: [docs/SPEC-memory.md](../docs/SPEC-memory.md) · Plan: [plan.md](plan.md#i
 
 ### Task 19: Facts shown to the model
 **Description:** `Brain(facts=...)` takes a callable. `_system_prompt(lang, facts)` puts the labelled facts block before `SYSTEM_PROMPT` so the language sentence stays last. With no facts the prompt is byte-identical to today's. `app.main` passes `facts=facts.all`.
+**Decided 2026-10-18 (user):** add `remember` and `forget` to `FORGOTTEN_TOOLS`, so those turns are kept neither in memory nor on disk. Otherwise the old "remember ..." turn still shows a forgotten fact for up to 12 hours (spec success criterion 3). The facts block is then the only place a fact lives. Add a test: after remember then forget, neither `brain.history` nor the store holds the fact.
+**From Task 18:** `check_tools.py 3` flips between runs at temperature 0 ("news today" calling `get_datetime` first), so run it at least 4 times, not twice.
 
 **Acceptance criteria:**
 - [ ] A test shows the no-facts prompt equals the old prompt exactly, and with facts the block comes first and the prompt still ends with the language sentence
