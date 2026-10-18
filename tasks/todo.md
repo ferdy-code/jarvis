@@ -383,19 +383,20 @@ Spec: [docs/SPEC-memory.md](../docs/SPEC-memory.md) · Plan: [plan.md](plan.md#i
 **Files:** `src/jarvis/app.py`, `tests/test_app.py`, `README.md`, `SPEC.md`, `CLAUDE.md`
 **Scope:** S
 
-### Task 21: Private-address guard for `web_lookup page`
+### Task 21: Private-address guard for `web_lookup page` ✅ (the spoken refusal through the full Jarvis loop is left to the user)
 **Description:** `netguard.check_public(url)` resolves the host and raises `BlockedAddress` if any resolved address is not `is_global` (IPv4-mapped IPv6 is unwrapped first). A name that does not resolve is not reported as blocked. `GuardedRedirectHandler` checks every redirect target. `web.page()` checks first and fetches through the guarded opener; `news`/`wiki` are unchanged. SPEC.md: the Limits line is reversed with the reason, and DNS rebinding is written down as the known residual risk.
 
 **Acceptance criteria:**
-- [ ] With `socket.getaddrinfo` patched: `127.0.0.1`, `10.x`, `172.16.x`, `192.168.x`, `169.254.169.254`, `100.64.x`, `::1`, `fc00::1`, `::ffff:127.0.0.1` and a name with one public and one private address are blocked; a public address is allowed; an unresolvable name is not blocked
-- [ ] A redirect to a private address is refused and one to a public address is followed; `page()` returns `error: could not read that page (blocked: that address is on a private network). Tell the user so and call no more tools.`; `web.py` still does not import `browser`
+- [x] With `socket.getaddrinfo` patched: `127.0.0.1`, `10.x`, `172.16.x`, `192.168.x`, `169.254.169.254`, `100.64.x`, `::1`, `fc00::1`, `::ffff:127.0.0.1` and a name with one public and one private address are blocked; a public address is allowed; an unresolvable name is not blocked
+- [x] A redirect to a private address is refused and one to a public address is followed; `page()` returns `error: could not read that page (blocked: that address is on a private network). Tell the user so and call no more tools.`; `web.py` still does not import `browser`
 - [ ] Manual: `web_lookup page` on `http://127.0.0.1:11435/v1/models` is refused with a spoken reason; a news page and Wikipedia still work; a public URL that redirects to a local `127.0.0.1` test server is refused
 
 **Verification:**
-- [ ] `uv run pytest -q tests/test_netguard.py tests/test_web.py`, then the full suite and ruff
-- [ ] `PYTHONIOENCODING=utf-8 uv run python scripts/check_tools.py 3` still reads `wrong: 0 of 84` (no description changed; this confirms nothing shifted)
+- [x] `uv run pytest -q tests/test_netguard.py tests/test_web.py`, then the full suite and ruff
+- [x] `PYTHONIOENCODING=utf-8 uv run python scripts/check_tools.py 3` still reads `wrong: 0 of 84` (no description changed; this confirms nothing shifted)
 - [ ] Manual: the three checks above
 
+**Result:** 308 tests, ruff clean; `check_tools.py 3` wrong 0 of 84. Real calls: `web_lookup page` on `127.0.0.1:11435/v1/models` and `192.168.1.1` returned the blocked error; news, Wikipedia and a Wikipedia page still answered. Redirect: a real 302 between two `127.0.0.1` servers was refused by the real `GuardedRedirectHandler` (plain urllib followed it). Not checked: a real public URL redirecting to a private one, and the refusal spoken through `uv run jarvis`.
 **Dependencies:** none (parallel with 16)
 **Files:** `src/jarvis/netguard.py`, `src/jarvis/web.py`, `tests/test_netguard.py`, `tests/test_web.py`, `SPEC.md`
 **Scope:** M
