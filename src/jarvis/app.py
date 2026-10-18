@@ -7,8 +7,9 @@ from contextlib import ExitStack
 import numpy as np
 import openai
 
-from jarvis import config, stt, trace, tts, wake
+from jarvis import config, memory_tools, stt, trace, tts, wake
 from jarvis.brain import Brain
+from jarvis.facts import Facts
 from jarvis.history import History
 from jarvis.mic import open_stream
 from jarvis.tools import TOOLS
@@ -219,11 +220,15 @@ def main() -> None:
         speak = load_speaker()
         listening = load_microphone()
 
+    tools = TOOLS
+    if config.DB_FILE:
+        tools = {**TOOLS, **memory_tools.build(Facts(config.DB_FILE))}
+
     assistant = Assistant(
         make_brain=lambda confirm: Brain(
             client,
             config.MODEL,
-            tools=TOOLS,
+            tools=tools,
             confirm=confirm,
             extra_body=config.EXTRA_BODY,
             history=History(config.DB_FILE) if config.DB_FILE else None,

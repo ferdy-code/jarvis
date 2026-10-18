@@ -333,22 +333,25 @@ Spec: [docs/SPEC-memory.md](../docs/SPEC-memory.md) · Plan: [plan.md](plan.md#i
 **Files:** `src/jarvis/history.py`, `src/jarvis/brain.py`, `src/jarvis/app.py`, `tests/test_history.py`, `tests/test_brain.py`, `SPEC.md`
 **Scope:** M
 
-### Task 18: Facts store and the remember/forget tools
+### Task 18: Facts store and the remember/forget tools ✅
 **Description:** `Facts(path)` with `all`, `add` and `remove`, plus the rules: 3-200 characters, at most 30 facts, a 3-character minimum for `remove`, and `looks_secret`. `memory_tools.build(facts)` returns `remember` and `forget`, both `refused_after=frozenset({"web_lookup"})`. `Tool` gets `refused_after`; `_converse`/`_execute` know where the current turn starts and refuse those tools after `web_lookup` in the same turn. The tools are merged in `app.main`. This task runs the tool-choice check before the prompt changes, because a new tool has shifted older behaviour every time so far.
 
 **Acceptance criteria:**
-- [ ] Unit tests cover every `Facts` rule and every `looks_secret` case ("pin" inside another word is allowed), and every result string of both tools
-- [ ] In a turn that called `web_lookup`, both tools return `error: not allowed in a turn that read web content` and the database does not change; in other turns they run
-- [ ] `check_tools.py` has `remember`/`forget` cases in both languages and negative cases that call nothing ("how do I remember a password", "what is RAM", "how do I forget a wifi network", plain chat); `check_tools.py 3` reads `wrong: 0 of <new total>` twice
+- [x] Unit tests cover every `Facts` rule and every `looks_secret` case ("pin" inside another word is allowed), and every result string of both tools
+- [x] In a turn that called `web_lookup`, both tools return `error: not allowed in a turn that read web content` and the database does not change; in other turns they run
+- [x] `check_tools.py` has `remember`/`forget` cases in both languages and negative cases that call nothing ("how do I remember a password", "what is RAM", "how do I forget a wifi network", plain chat); `check_tools.py 3` reads `wrong: 0 of <new total>` twice
 
 **Verification:**
-- [ ] `uv run pytest -q tests/test_facts.py tests/test_memory_tools.py tests/test_brain.py`, then the full suite and ruff
-- [ ] `PYTHONIOENCODING=utf-8 uv run python scripts/check_tools.py 3`, run twice
-- [ ] Manual (typed): "remember that my cat is called Mochi", then "remember my password is hunter2" (refused), then "forget the cat"
+- [x] `uv run pytest -q tests/test_facts.py tests/test_memory_tools.py tests/test_brain.py`, then the full suite and ruff
+- [x] `PYTHONIOENCODING=utf-8 uv run python scripts/check_tools.py 3`, run twice
+- [x] Manual (typed): "remember that my cat is called Mochi", then "remember my password is hunter2" (refused), then "forget the cat"
 
 **Dependencies:** 17
 **Files:** `src/jarvis/facts.py`, `src/jarvis/memory_tools.py`, `src/jarvis/tools.py`, `src/jarvis/brain.py`, `src/jarvis/app.py`, `tests/test_facts.py`, `tests/test_memory_tools.py`, `scripts/check_tools.py`
 **Scope:** M (more files than the 5-file guide, but most are small and new)
+
+**Result:** 365 tests (308 before), ruff clean; `check_tools.py 3` wrong 0 of 126 on the final wording, twice in the final check (4 more clean runs while tuning); `check_conversation.py 3` fresh data 75/75, reply language 75/75. Manual typed run: the cat fact was stored, the password was refused, "forget the cat" emptied the table.
+**Found on the way:** with remember/forget added, "berita terbaru hari ini apa?" (and once "what's the news today?") called `get_datetime` before `web_lookup`, 3 of 126 in 3 of 5 runs (baseline 0 of 84 in 5 runs). Shortening the new descriptions made it worse (6 of 126 every run); adding "the news is not a date question, so never check the date first" to the `web_lookup` description fixed it (0 of 126 in 6 runs).
 
 ### Task 19: Facts shown to the model
 **Description:** `Brain(facts=...)` takes a callable. `_system_prompt(lang, facts)` puts the labelled facts block before `SYSTEM_PROMPT` so the language sentence stays last. With no facts the prompt is byte-identical to today's. `app.main` passes `facts=facts.all`.

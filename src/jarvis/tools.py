@@ -15,6 +15,8 @@ class Tool:
     fn: Callable[..., str]
     schema: dict
     dangerous: bool = False
+    # Tools that, once called in a turn, make this one refuse (prompt-injection guard).
+    refused_after: frozenset[str] = frozenset()
 
 
 def get_datetime() -> str:
@@ -101,6 +103,7 @@ def _tool(
     properties: dict | None = None,
     required: list[str] | None = None,
     dangerous: bool = False,
+    refused_after: frozenset[str] = frozenset(),
 ) -> Tool:
     schema = {
         "type": "function",
@@ -114,7 +117,7 @@ def _tool(
             },
         },
     }
-    return Tool(fn=fn, schema=schema, dangerous=dangerous)
+    return Tool(fn, schema, dangerous, refused_after)
 
 
 TOOLS: dict[str, Tool] = {
@@ -149,11 +152,14 @@ TOOLS: dict[str, Tool] = {
     "web_lookup": _tool(
         web_lookup,
         # Answers aloud. It never opens a page or a browser.
+        # After remember and forget were added, "news today" called get_datetime first
+        # in 3 of 126 samples in 3 of 5 runs; saying news is not a date question fixed
+        # it (0 of 126 in 6 runs in a row).
         "Read something from the internet and say a short summary aloud, naming the "
-        "source. Use it for the news of today or any day (without checking the date "
-        "first), for an encyclopedia answer about a person, place or event, and for "
-        "summarising a website whose address the user gives. It does not open "
-        "anything on screen "
+        "source. Use it for the news of today or any day (the news is not a date "
+        "question, so never check the date first), for an encyclopedia answer about "
+        "a person, place or event, and for summarising a website whose address the "
+        "user gives. It does not open anything on screen "
         "and cannot search Google. Questions you can answer yourself "
         "(general knowledge, maths, jokes, chat) get a normal spoken answer, never "
         "this tool.",

@@ -627,3 +627,97 @@ def test_an_offline_brain_saves_nothing():
 
     assert reply == OFFLINE_MESSAGE
     assert store.saved == []
+
+
+def guarded(runs, name="remember"):
+    return Tool(
+        fn=lambda: runs.append(name) or "stored",
+        schema={"type": "function", "function": {"name": name}},
+        refused_after=frozenset({"web_lookup"}),
+    )
+
+
+def two_calls(*names):
+    """One scripted model reply that lists several tool calls."""
+    return SimpleNamespace(
+        content=None,
+        tool_calls=[
+            SimpleNamespace(
+                id=f"call-{n}", function=SimpleNamespace(name=name, arguments="{}")
+            )
+            for n, name in enumerate(names)
+        ],
+    )
+
+
+WEB_TOOL = named_tool("web_lookup", lambda: "<web>rain</web>")
+REFUSAL = "error: not allowed in a turn that read web content"
+
+
+def test_a_guarded_tool_is_refused_after_web_content_in_an_earlier_round():
+    runs = []
+    client = FakeClient([call("web_lookup"), call("remember", id="c2"), "done"])
+    brain = Brain(
+        client, model="m", tools={"web_lookup": WEB_TOOL, "remember": guarded(runs)}
+    )
+
+    brain.ask("news, then remember it")
+
+    assert runs == []
+    assert tool_results(client, 2)[-1]["content"] == REFUSAL
+
+
+def test_a_guarded_tool_is_refused_after_web_content_in_the_same_message():
+    runs = []
+    client = FakeClient([two_calls("web_lookup", "remember"), "done"])
+    brain = Brain(
+        client, model="m", tools={"web_lookup": WEB_TOOL, "remember": guarded(runs)}
+    )
+
+    brain.ask("news, then remember it")
+
+    assert runs == []
+    assert [m["content"] for m in tool_results(client, 1)] == [
+        "<web>rain</web>",
+        REFUSAL,
+    ]
+
+
+def test_a_guarded_tool_listed_before_web_content_in_one_message_is_refused_too():
+    runs = []
+    client = FakeClient([two_calls("remember", "web_lookup"), "done"])
+    brain = Brain(
+        client, model="m", tools={"web_lookup": WEB_TOOL, "remember": guarded(runs)}
+    )
+
+    brain.ask("x")
+
+    assert runs == []
+    assert tool_results(client, 1)[0]["content"] == REFUSAL
+
+
+def test_web_content_in_an_earlier_turn_does_not_block_a_guarded_tool():
+    runs = []
+    client = FakeClient([call("web_lookup"), "Rain.", call("remember"), "Saved."])
+    brain = Brain(
+        client, model="m", tools={"web_lookup": WEB_TOOL, "remember": guarded(runs)}
+    )
+
+    brain.ask("what is the news?")
+    brain.ask("remember I like rain")
+
+    assert runs == ["remember"]
+    assert tool_results(client, 3)[-1]["content"] == "stored"
+
+
+def test_a_tool_that_refuses_after_nothing_is_never_blocked():
+    client = FakeClient([call("web_lookup"), call("clock", id="c2"), "done"])
+    brain = Brain(
+        client,
+        model="m",
+        tools={"web_lookup": WEB_TOOL, "clock": named_tool("clock", lambda: "10:00")},
+    )
+
+    brain.ask("x")
+
+    assert tool_results(client, 2)[-1]["content"] == "10:00"

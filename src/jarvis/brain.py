@@ -97,7 +97,7 @@ class Brain:
         start = len(messages)
         messages.append({"role": "user", "content": text})
         try:
-            reply = self._converse(messages)
+            reply = self._converse(messages, start)
         except openai.APIConnectionError:
             return OFFLINE_MESSAGE
         turn = [*messages[start:], {"role": "assistant", "content": reply}]
@@ -114,7 +114,7 @@ class Brain:
         except Exception as error:  # noqa: BLE001 - a full disk must not lose the reply
             print(f"Could not save the conversation: {error}")
 
-    def _converse(self, messages: list[dict]) -> str:
+    def _converse(self, messages: list[dict], start: int) -> str:
         for _ in range(MAX_TOOL_ROUNDS):
             message = self._complete(messages, with_tools=True)
             if not message.tool_calls:
@@ -122,8 +122,11 @@ class Brain:
                     return message.content or ""
                 break  # a call to a tool that does not exist, written out as text
             messages.append(_assistant_message(message))
+            # Every call in this message counts, even one listed after the tool that is
+            # checked: the model chose them together, so a refusal never depends on order.
+            used = _tools_used(messages[start:])
             for tool_call in message.tool_calls:
-                result = self._run_tool(tool_call)
+                result = self._run_tool(tool_call, used)
                 messages.append(
                     {"role": "tool", "tool_call_id": tool_call.id, "content": result}
                 )
@@ -146,19 +149,22 @@ class Brain:
             )
         return message
 
-    def _run_tool(self, tool_call) -> str:
+    def _run_tool(self, tool_call, used: set[str]) -> str:
         name = tool_call.function.name
         arguments = trace.preview(tool_call.function.arguments or "{}")
         with trace.span("tool", tool=name, arguments=arguments) as span:
-            result = self._execute(tool_call)
+            result = self._execute(tool_call, used)
             span.set(status=_status(result), result=trace.preview(result))
         return result
 
-    def _execute(self, tool_call) -> str:
+    def _execute(self, tool_call, used: set[str]) -> str:
         name = tool_call.function.name
         tool = self.tools.get(name)
         if tool is None:
             return f"error: unknown tool {name!r}"
+        # Web text can talk the model into a call; see Prompt-injection rules in docs/SPEC-memory.md.
+        if used & tool.refused_after:
+            return "error: not allowed in a turn that read web content"
         try:
             arguments = json.loads(tool_call.function.arguments or "{}")
         except json.JSONDecodeError as error:
