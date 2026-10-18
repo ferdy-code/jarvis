@@ -16,3 +16,6 @@ logs/
 
 # Conversation history and remembered facts (what was said)
 data/
+
+# Generated architecture diagrams (archify)
+.archify/
