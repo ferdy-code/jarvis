@@ -54,7 +54,7 @@ Memory (off with `JARVIS_DB_FILE=off`: no file, no memory tools, prompt unchange
 
 - `db.py`: SQLite file (`data/jarvis.sqlite3`), tables `turns` and `facts`, one connection per operation; refuses a newer `user_version`.
 - `history.py`: saves each turn, keeps 100, loads the newest 10 under 12 h old. `FORGOTTEN_TOOLS` turns are neither kept nor saved; `UNSAVED_TOOLS` (`web_lookup`) are kept for the run but never written.
-- `facts.py` (max 30, 3-200 chars, `looks_secret`) + `memory_tools.py` (`remember`, `forget`; `Tool.refused_after` makes them error in a turn that called `web_lookup`, so a web page cannot write memory). The facts block goes before `SYSTEM_PROMPT` (language sentence still last); a successful `forget` clears the saved history, or the old chat would bring the fact back.
+- `facts.py` (max 30, 3-200 chars, `looks_secret`) + `memory_tools.py` (`remember`, `forget`; `Tool.refused_after` makes them error while a `web_lookup` turn is still in the kept history (this turn or the last 10), so a web page cannot write memory). The facts block goes before `SYSTEM_PROMPT` (language sentence still last); a successful `forget` clears the saved history, or the old chat would bring the fact back.
 - `netguard.py`: `web_lookup page` refuses non-public addresses and redirects to them.
 
 `config.py` reads all settings from `JARVIS_*` env vars. `tests/test_readme.py` fails unless README documents exactly those settings, so add new ones to README too. `EXTRA_BODY` (thinking off, temperature 0) is sent only when the base URL is local.

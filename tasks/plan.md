@@ -109,7 +109,7 @@ netguard.py + web.page (21)        independent; may run in parallel with 16
 - **Spec Task 3 is split by risk, not by module.** Task 18 adds the two tools and their descriptions and runs `check_tools.py`. Every new tool has shifted older behaviour, so false `remember`/`forget` calls are the most likely failure and get found first. Task 19 then adds the facts block to the prompt and runs `check_conversation.py`, the multi-turn facts case and the latency check.
 - **Each task updates its own docs** (Boundaries: "README, SPEC.md and CLAUDE.md in the same task"). Task 20 adds the reset command, the README Safety section and a final pass so the three documents match the code.
 - **`brain.py` gets objects, not storage:** `history` (load/save) and `facts` (a callable). The unit tests use fakes and no sqlite.
-- **`refused_after` needs the start of the current turn:** `ask` passes `start` to `_converse` and then to `_execute`, which checks `_tools_used(messages[start:])`.
+- **`refused_after` checks every message sent to the model** (changed in Task 22; the first version used only the current turn, `messages[start:]`, and a web turn kept in the history could still talk the model into `remember` one turn later): `_converse` passes `_tools_used(messages)` to `_execute`.
 - **One stop per task** so the user can run the real-model checks on this PC before the next one (spec "How to run this").
 
 ## Task List

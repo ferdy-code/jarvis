@@ -112,7 +112,7 @@ class Brain:
         start = len(messages)
         messages.append({"role": "user", "content": text})
         try:
-            reply = self._converse(messages, start)
+            reply = self._converse(messages)
         except openai.APIConnectionError:
             return OFFLINE_MESSAGE
         turn = [*messages[start:], {"role": "assistant", "content": reply}]
@@ -150,7 +150,7 @@ class Brain:
         except Exception as error:  # noqa: BLE001 - a full disk must not lose the reply
             print(f"Could not save the conversation: {error}")
 
-    def _converse(self, messages: list[dict], start: int) -> str:
+    def _converse(self, messages: list[dict]) -> str:
         for _ in range(MAX_TOOL_ROUNDS):
             message = self._complete(messages, with_tools=True)
             if not message.tool_calls:
@@ -158,9 +158,12 @@ class Brain:
                     return message.content or ""
                 break  # a call to a tool that does not exist, written out as text
             messages.append(_assistant_message(message))
-            # Every call in this message counts, even one listed after the tool that is
-            # checked: the model chose them together, so a refusal never depends on order.
-            used = _tools_used(messages[start:])
+            # Every message counts, not only this turn's: web text from an earlier turn is
+            # still in front of the model while that turn is kept (the last MAX_TURNS), so
+            # it can talk the model into a call later too. Every call in this message
+            # counts as well, even one listed after the tool that is checked: the model
+            # chose them together, so a refusal never depends on order.
+            used = _tools_used(messages)
             for tool_call in message.tool_calls:
                 result = self._run_tool(tool_call, used)
                 messages.append(
@@ -200,7 +203,7 @@ class Brain:
             return f"error: unknown tool {name!r}"
         # Web text can talk the model into a call; see Prompt-injection rules in docs/SPEC-memory.md.
         if used & tool.refused_after:
-            return "error: not allowed in a turn that read web content"
+            return "error: not allowed after web content was read in this conversation"
         try:
             arguments = json.loads(tool_call.function.arguments or "{}")
         except json.JSONDecodeError as error:

@@ -412,6 +412,24 @@ After the user's decision (a successful forget clears the history, `History.clea
 **Files:** `src/jarvis/netguard.py`, `src/jarvis/web.py`, `tests/test_netguard.py`, `tests/test_web.py`, `SPEC.md`
 **Scope:** M
 
+### Task 22: Web-content guard also covers the kept history ✅ (the real-model checks are left to the user)
+**Description:** Review of Tasks 16-21 found that `refused_after` looked only at the current turn. A `web_lookup` turn stays in the in-memory history (it is only kept off the disk), so the page's text was still in front of the model on the next turn, where `remember` was allowed. Demonstrated with the real `Brain`, `Facts` and `History`: turn 1 `web_lookup`, turn 2 an unrelated question, and the model's `remember` call stored the fact. `_converse` now passes `_tools_used(messages)` (system prompt, kept turns and this turn) instead of `messages[start:]`, and the `start` parameter is gone. The refusal text is now `error: not allowed after web content was read in this conversation`, because "in a turn" would be wrong for a later turn.
+
+**Acceptance criteria:**
+- [x] `remember` and `forget` are refused in the turn after a `web_lookup` turn (the old test that pinned the opposite is replaced)
+- [x] They work again once the web turn has left the last 10 turns, and after a restart (the web turn was never saved)
+- [x] A conversation with no `web_lookup` is never blocked
+- [x] The new "refused in the next turn" test fails on the old behaviour and passes now
+
+**Verification:**
+- [x] `uv run pytest -q`, `uv run ruff check src tests scripts`, `uv run ruff format --check src tests scripts`
+- [ ] Manual: `"what is the news?"`, then `"remember that I like jazz"` is refused in speech; after 10 more turns, or a restart, the same request is stored
+- [ ] `check_tools.py 3` still `wrong: 0 of 126`, and `check_conversation.py 3` still 75/75 and 75/75 (no prompt or description changed; this confirms the refusal text did not shift anything)
+
+**Dependencies:** 19
+**Files:** `src/jarvis/brain.py`, `tests/test_brain.py`, `SPEC.md`, `CLAUDE.md`, `docs/SPEC-memory.md`, `tasks/plan.md`
+**Scope:** S
+
 ## Checkpoint: Memory and web guard complete
 - [ ] All 9 success criteria in `docs/SPEC-memory.md` pass
   - 7 of 9 met. #4 (Indonesian secret) was closed 2026-10-18 with the real model: "kata sandi wifi", a 16-digit KTP number and "PIN ATM", 2 runs each, all refused in Indonesian, nothing stored. Still partly met: #5 (unit tests only, no real injected page) and #7 (no real public-to-private redirect, refusal not heard through `uv run jarvis`).

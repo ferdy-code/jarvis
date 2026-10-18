@@ -7,6 +7,7 @@ import pytest
 from jarvis.brain import (
     FACTS_LABEL,
     GIVE_UP_MESSAGE,
+    MAX_TURNS,
     OFFLINE_MESSAGE,
     SYSTEM_PROMPT,
     Brain,
@@ -667,7 +668,7 @@ def two_calls(*names):
 
 
 WEB_TOOL = named_tool("web_lookup", lambda: "<web>rain</web>")
-REFUSAL = "error: not allowed in a turn that read web content"
+REFUSAL = "error: not allowed after web content was read in this conversation"
 
 
 def test_a_guarded_tool_is_refused_after_web_content_in_an_earlier_round():
@@ -712,18 +713,76 @@ def test_a_guarded_tool_listed_before_web_content_in_one_message_is_refused_too(
     assert tool_results(client, 1)[0]["content"] == REFUSAL
 
 
-def test_web_content_in_an_earlier_turn_does_not_block_a_guarded_tool():
+def test_a_guarded_tool_is_refused_in_the_turn_after_web_content():
+    # the page text is still in the history, so it can talk the model into the call
     runs = []
-    client = FakeClient([call("web_lookup"), "Rain.", call("remember"), "Saved."])
+    client = FakeClient([call("web_lookup"), "Rain.", call("remember"), "Okay."])
     brain = Brain(
         client, model="m", tools={"web_lookup": WEB_TOOL, "remember": guarded(runs)}
     )
 
     brain.ask("what is the news?")
+    brain.ask("what is the weather like?")
+
+    assert runs == []
+    assert tool_results(client, 3)[-1]["content"] == REFUSAL
+
+
+def test_a_guarded_tool_works_again_once_the_web_turn_has_left_the_history():
+    runs = []
+    script = [
+        call("web_lookup"),
+        "Rain.",
+        *["ok"] * MAX_TURNS,
+        call("remember"),
+        "Saved.",
+    ]
+    client = FakeClient(script)
+    brain = Brain(
+        client, model="m", tools={"web_lookup": WEB_TOOL, "remember": guarded(runs)}
+    )
+
+    brain.ask("what is the news?")
+    for _ in range(MAX_TURNS):
+        brain.ask("thanks")
     brain.ask("remember I like rain")
 
     assert runs == ["remember"]
-    assert tool_results(client, 3)[-1]["content"] == "stored"
+
+
+def test_a_guarded_tool_works_after_a_restart_because_web_turns_are_never_saved():
+    runs = []
+    store = FakeStore()
+    first = Brain(
+        FakeClient([call("web_lookup"), "Rain."]),
+        model="m",
+        tools={"web_lookup": WEB_TOOL},
+        history=store,
+    )
+    first.ask("what is the news?")
+
+    second = Brain(
+        FakeClient([call("remember"), "Saved."]),
+        model="m",
+        tools={"web_lookup": WEB_TOOL, "remember": guarded(runs)},
+        history=FakeStore(turns=store.saved),
+    )
+    second.ask("remember I like rain")
+
+    assert runs == ["remember"]
+
+
+def test_a_turn_without_web_content_never_blocks_a_guarded_tool():
+    runs = []
+    client = FakeClient(["Hello.", call("remember"), "Saved."])
+    brain = Brain(
+        client, model="m", tools={"web_lookup": WEB_TOOL, "remember": guarded(runs)}
+    )
+
+    brain.ask("hi")
+    brain.ask("remember I like rain")
+
+    assert runs == ["remember"]
 
 
 def test_a_tool_that_refuses_after_nothing_is_never_blocked():
