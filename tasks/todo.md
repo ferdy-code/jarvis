@@ -316,18 +316,18 @@ Spec: [docs/SPEC-memory.md](../docs/SPEC-memory.md) · Plan: [plan.md](plan.md#i
 **Files:** `src/jarvis/db.py`, `src/jarvis/config.py`, `tests/test_db.py`, `README.md`, `.gitignore`
 **Scope:** S
 
-### Task 17: Saved history across restarts
+### Task 17: Saved history across restarts ✅
 **Description:** `History(path)` saves each turn as JSON and loads the newest ones that are less than 12 hours old. `Brain` takes `history=`, loads at start and saves after each turn, except turns using `FORGOTTEN_TOOLS` (not kept at all) and `UNSAVED_TOOLS = {"web_lookup"}` (kept for this run, never written). A failing load or save prints one line and never breaks `ask`. `app.main` wires it in unless `DB_FILE` is `None`.
 
 **Acceptance criteria:**
-- [ ] Round-trip keeps Indonesian text and tool-call messages; oldest first; `limit`, the 12-hour cut, pruning to `keep=100` and a skipped corrupt row are all tested
-- [ ] A `web_lookup` turn stays in `brain.history` but is not in the database; a clock turn is in neither; a raising `load`/`save` does not break `ask`
-- [ ] Manual (typed, English and Indonesian): chat, exit, restart, then "what did I ask you before?" is answered from the saved turns
+- [x] Round-trip keeps Indonesian text and tool-call messages; oldest first; `limit`, the 12-hour cut, pruning to `keep=100` and a skipped corrupt row are all tested
+- [x] A `web_lookup` turn stays in `brain.history` but is not in the database; a clock turn is in neither; a raising `load`/`save` does not break `ask`
+- [x] Manual (typed, English and Indonesian): chat, exit, restart, then "what did I ask you before?" is answered from the saved turns
 
 **Verification:**
-- [ ] `uv run pytest -q tests/test_history.py tests/test_brain.py tests/test_app.py`, then the full suite and ruff
-- [ ] `uv run python scripts/check_conversation.py 3` still reads 75/75 and 75/75
-- [ ] Manual: the restart check above
+- [x] `uv run pytest -q tests/test_history.py tests/test_brain.py tests/test_app.py`, then the full suite and ruff
+- [x] `uv run python scripts/check_conversation.py 3` still reads 75/75 and 75/75
+- [x] Manual: the restart check above
 
 **Dependencies:** 16
 **Files:** `src/jarvis/history.py`, `src/jarvis/brain.py`, `src/jarvis/app.py`, `tests/test_history.py`, `tests/test_brain.py`, `SPEC.md`

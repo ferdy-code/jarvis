@@ -52,6 +52,10 @@ LANGUAGE_NAMES = {"en": "English", "id": "Indonesian"}
 # wrong-language reply that no amount of prompt wording fixed for good.
 FORGOTTEN_TOOLS = {"get_datetime", "get_battery"}
 
+# A turn that read web content is kept for this run but never written to disk, so
+# text taken from a page cannot come back after a restart.
+UNSAVED_TOOLS = {"web_lookup"}
+
 
 class Brain:
     def __init__(
@@ -61,6 +65,7 @@ class Brain:
         tools: dict[str, Tool] | None = None,
         confirm: Callable[[str], bool] | None = None,
         extra_body: dict | None = None,
+        history=None,
     ):
         self.client = client
         self.model = model
@@ -73,6 +78,13 @@ class Brain:
         # call a tool and began answering "Musik sudah dipause" without calling one.
         # Whole turns are trimmed together, so a tool call is never cut from its result.
         self.history: list[list[dict]] = []
+        # Anything with load() and save(turn); the brain itself does no file I/O.
+        self._store = history
+        if history is not None:
+            try:
+                self.history = history.load()[-MAX_TURNS:]
+            except Exception as error:  # noqa: BLE001 - Jarvis must start without its past
+                print(f"Could not load the saved conversation: {error}")
 
     def ask(self, text: str, lang: str | None = None) -> str:
         # Told to the model outright when the words make it clear: with only the
@@ -89,9 +101,18 @@ class Brain:
         except openai.APIConnectionError:
             return OFFLINE_MESSAGE
         turn = [*messages[start:], {"role": "assistant", "content": reply}]
-        if not _tools_used(turn) & FORGOTTEN_TOOLS:
+        used = _tools_used(turn)
+        if not used & FORGOTTEN_TOOLS:
             self.history = [*self.history, turn][-MAX_TURNS:]
+            if self._store is not None and not used & UNSAVED_TOOLS:
+                self._save(turn)
         return reply
+
+    def _save(self, turn: list[dict]) -> None:
+        try:
+            self._store.save(turn)
+        except Exception as error:  # noqa: BLE001 - a full disk must not lose the reply
+            print(f"Could not save the conversation: {error}")
 
     def _converse(self, messages: list[dict]) -> str:
         for _ in range(MAX_TOOL_ROUNDS):

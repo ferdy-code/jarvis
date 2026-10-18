@@ -78,11 +78,18 @@ Each tool is a plain function that returns a short string for the LLM to work in
   4. Appends the results and calls the LLM again.
   5. Stops at a text reply, or after 3 rounds of tool calls.
 - System prompt: you are Jarvis, keep replies short (1–3 sentences, because they're spoken), answer in the user's language (`lang` hint provided), use tools for time, battery, volume, lock and power, and never pretend to have done an action you didn't run.
-- History is in memory only and lost on exit. It is a list of whole turns (the question, any tool calls with their results, and the reply), trimmed to the last 10 turns together, so a tool call is never cut from its result. Why whole turns: with only the reply text kept, the model never saw itself call a tool and, in a longer chat, answered "Musik sudah dipause" without calling one (the music kept playing). With tool calls kept, 9 of 9 music sequences ended correctly; with text only, 0 of 3.
+- History is a list of whole turns (the question, any tool calls with their results, and the reply), trimmed to the last 10 turns together, so a tool call is never cut from its result. Why whole turns: with only the reply text kept, the model never saw itself call a tool and, in a longer chat, answered "Musik sudah dipause" without calling one (the music kept playing). With tool calls kept, 9 of 9 music sequences ended correctly; with text only, 0 of 3.
 - Turns that read the clock or battery (`FORGOTTEN_TOOLS`) are not remembered at all: a reading is out of date once spoken, and the model copied its old answer, in the old language, instead of asking again.
 - The reply language is told to the model when `detect_language` (the shared function-word lists in `language.py`) is sure about the user's words ("The user is speaking Indonesian"); short commands such as "kecilkan volume" get no hint. A `lang` given by the caller wins.
 - Prompt wording that matters, each found by a failing check: how-to questions get answers and only orders get actions; a greeting, goodnight or thank you is not a command; and the language sentence must stay last (with the how-to sentence after it the reply language was wrong 6 of 75 times). Adding a tool can shift all of this, so run the suites listed under Testing Strategy after every new tool.
 - If the LLM server can't be reached, it returns the message "My brain is offline. Is LlamaStash running?" and doesn't crash.
+
+### `history`: the conversation across restarts
+
+- `History(path)` (`history.py`) keeps each finished turn as JSON in the `turns` table of `JARVIS_DB_FILE` (see `db.py`), one connection per operation. `Brain(history=...)` takes anything with `load()` and `save(turn)`, so `brain.py` stays free of I/O; `app.main` passes a `History` unless the setting is `off`.
+- It saves after each turn and keeps the newest 100 rows. At start it loads the newest 10 (`brain.MAX_TURNS`, imported so the two cannot differ) that are under 12 hours old, oldest first. The age cut exists because a turn from yesterday carries stale tool results ("volume 40%", "playing ...") and an old language can pull the reply into the wrong language. A row that is not valid JSON is skipped.
+- Turns using `FORGOTTEN_TOOLS` are neither kept nor saved. Turns using `UNSAVED_TOOLS = {"web_lookup"}` stay in memory for this run only: text taken from a web page must not come back after a restart.
+- A failing load (Jarvis starts with an empty history) or save prints one line and never changes the reply.
 
 ### `tts`
 

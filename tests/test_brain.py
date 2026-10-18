@@ -517,3 +517,113 @@ def test_a_server_that_is_down_is_traced_as_a_failed_model_call(tmp_path):
 
     assert spans[0]["name"] == "llm"
     assert spans[0]["error"] == "APIConnectionError"
+
+
+class FakeStore:
+    """An in-memory stand-in for History."""
+
+    def __init__(self, turns=None, load_error=None, save_error=None):
+        self.turns = list(turns or [])
+        self.load_error = load_error
+        self.save_error = save_error
+        self.saved = []
+
+    def load(self):
+        if self.load_error:
+            raise self.load_error
+        return self.turns
+
+    def save(self, turn):
+        if self.save_error:
+            raise self.save_error
+        self.saved.append(turn)
+
+
+def stored_turn(question, reply):
+    return [
+        {"role": "user", "content": question},
+        {"role": "assistant", "content": reply},
+    ]
+
+
+def test_saved_turns_are_loaded_at_start_and_sent_to_the_model():
+    client = FakeClient(["ok"])
+    store = FakeStore([stored_turn("warna favoritku hijau", "Baik.")])
+
+    Brain(client, model="m", history=store).ask("tadi aku bilang apa?")
+
+    assert sent_texts(client, 0) == [
+        "warna favoritku hijau",
+        "Baik.",
+        "tadi aku bilang apa?",
+    ]
+
+
+def test_a_normal_turn_is_saved():
+    store = FakeStore()
+
+    Brain(FakeClient(["Hello."]), model="m", history=store).ask("hi")
+
+    assert store.saved == [stored_turn("hi", "Hello.")]
+
+
+def test_a_clock_turn_is_neither_kept_nor_saved():
+    store = FakeStore()
+    brain = Brain(
+        FakeClient([call("get_datetime"), "It is 18:31."]),
+        model="m",
+        tools={"get_datetime": named_tool("get_datetime", lambda: "18:31")},
+        history=store,
+    )
+
+    brain.ask("what time is it?")
+
+    assert brain.history == []
+    assert store.saved == []
+
+
+def test_a_web_turn_is_kept_for_this_run_but_never_saved():
+    store = FakeStore()
+    client = FakeClient([call("web_lookup"), "Rain is coming.", "ok"])
+    brain = Brain(
+        client,
+        model="m",
+        tools={"web_lookup": named_tool("web_lookup", lambda: "<web>rain</web>")},
+        history=store,
+    )
+
+    brain.ask("what is the news?")
+    brain.ask("thanks")
+
+    assert "Rain is coming." in sent_texts(client, 2)
+    assert len(brain.history) == 2
+    assert store.saved == [stored_turn("thanks", "ok")]
+
+
+def test_a_load_that_fails_starts_empty_and_ask_still_works(capsys):
+    store = FakeStore(load_error=RuntimeError("disk gone"))
+    brain = Brain(FakeClient(["Hello."]), model="m", history=store)
+
+    assert brain.history == []
+    assert brain.ask("hi") == "Hello."
+    assert "Could not load the saved conversation: disk gone" in capsys.readouterr().out
+
+
+def test_a_save_that_fails_does_not_change_the_reply(capsys):
+    store = FakeStore(save_error=RuntimeError("disk full"))
+    brain = Brain(FakeClient(["Hello."]), model="m", history=store)
+
+    assert brain.ask("hi") == "Hello."
+    assert len(brain.history) == 1
+    assert "Could not save the conversation: disk full" in capsys.readouterr().out
+
+
+def test_an_offline_brain_saves_nothing():
+    store = FakeStore()
+
+    reply = Brain(FakeClient(error=connection_error()), model="m", history=store).ask(
+        "hi"
+    )
+
+    assert reply == OFFLINE_MESSAGE
+    assert store.saved == []

@@ -9,6 +9,7 @@ import openai
 
 from jarvis import config, stt, trace, tts, wake
 from jarvis.brain import Brain
+from jarvis.history import History
 from jarvis.mic import open_stream
 from jarvis.tools import TOOLS
 
@@ -225,6 +226,7 @@ def main() -> None:
             tools=TOOLS,
             confirm=confirm,
             extra_body=config.EXTRA_BODY,
+            history=History(config.DB_FILE) if config.DB_FILE else None,
         ),
         speak=speak,
         listen=stt.listen,
