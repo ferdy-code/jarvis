@@ -13,8 +13,7 @@ from jarvis import config
 
 MAX_ADDRESS_LENGTH = 2048
 DEFAULT_FIREFOX = "C:/Program Files/Mozilla Firefox/firefox.exe"
-MEDIA_KEYS = {"next": 0xB0, "previous": 0xB1, "play_pause": 0xB3}
-PAGE_KEYS = {"down": 0x22, "up": 0x21}  # Page Down, Page Up
+MEDIA_KEYS = {"play_pause": 0xB3}
 
 
 def check_web_address(address: str) -> str:
@@ -153,44 +152,12 @@ def pause_if_playing() -> bool:
 
 @functools.cache
 def _win():
-    """user32 with the argument types the window calls below need."""
+    """user32 for the mouse nudge."""
     import ctypes
     from ctypes import wintypes
 
     user32 = ctypes.windll.user32
-    user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
-    user32.GetClassNameW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
-    user32.SetForegroundWindow.argtypes = [wintypes.HWND]
-    user32.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
-    user32.IsIconic.argtypes = [wintypes.HWND]
-    user32.IsWindowVisible.argtypes = [wintypes.HWND]
-    user32.GetForegroundWindow.restype = wintypes.HWND
     return user32, ctypes, wintypes
-
-
-def _firefox_windows() -> list[tuple[int, str]]:
-    """(handle, title) of every visible Firefox window. A title ends with the name
-    of its profile: "Example Domain — Keina Nara — Mozilla Firefox"."""
-    user32, ctypes, wintypes = _win()
-    found = []
-
-    def visit(hwnd, _):
-        if user32.IsWindowVisible(hwnd):
-            name = ctypes.create_unicode_buffer(256)
-            user32.GetClassNameW(hwnd, name, 256)
-            if name.value == "MozillaWindowClass":
-                title = ctypes.create_unicode_buffer(512)
-                user32.GetWindowTextW(hwnd, title, 512)
-                found.append((hwnd, title.value))
-        return True
-
-    callback = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
-    user32.EnumWindows(callback(visit), 0)
-    return found
-
-
-def _front_window():
-    return _win()[0].GetForegroundWindow()
 
 
 def nudge_mouse() -> None:
@@ -199,50 +166,3 @@ def nudge_mouse() -> None:
     mouse_event = _win()[0].mouse_event
     mouse_event(0x0001, 1, 0, 0, 0)  # 0x0001: move
     mouse_event(0x0001, -1, 0, 0, 0)
-
-
-def _bring_to_front(window) -> bool:
-    """Make this window the one in front. True only if it really is afterwards.
-
-    Not done with a tap of Alt: in Firefox that toggles the menu bar, and the next
-    key (the Page Down) then went into the menu, so every second scroll was lost.
-    """
-    user32 = _win()[0]
-    if user32.IsIconic(window):
-        user32.ShowWindow(window, 9)  # restore a minimised window
-    nudge_mouse()
-    user32.SetForegroundWindow(window)
-    time.sleep(0.3)
-    return user32.GetForegroundWindow() == window
-
-
-def _press_key(code: int) -> None:
-    user32 = _win()[0]
-    user32.keybd_event(code, 0, 0, 0)
-    user32.keybd_event(code, 0, 0x2, 0)
-
-
-def scroll(direction: str) -> str:
-    """Page Down or Page Up in the Firefox window of the chosen profile.
-
-    The key is only sent once that window is verified to be in front, and the
-    window the user was in gets the focus back.
-    """
-    key = PAGE_KEYS.get(direction)
-    if key is None:
-        raise ValueError(f"direction must be up or down, not {direction!r}")
-    profile = config.FIREFOX_PROFILE
-    marker = f"— {profile} —" if profile else ""
-    window = next((hwnd for hwnd, title in _firefox_windows() if marker in title), None)
-    if window is None:
-        return f"error: no Firefox window found for the profile '{profile}'"
-    previous = _front_window()
-    if not _bring_to_front(window):
-        return "error: could not bring Firefox to the front"
-    try:
-        _press_key(key)
-        time.sleep(0.3)
-    finally:
-        if previous and previous != window:
-            _bring_to_front(previous)
-    return f"scrolled {direction}"

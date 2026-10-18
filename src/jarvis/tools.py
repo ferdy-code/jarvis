@@ -2,12 +2,11 @@ import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
-from urllib.parse import quote_plus
 
 import psutil
 from pycaw.pycaw import AudioUtilities
 
-from jarvis import browser, music, web
+from jarvis import browser, music
 
 
 @dataclass(frozen=True)
@@ -58,20 +57,6 @@ def wake_screen() -> str:
     )
 
 
-def open_website(address: str) -> str:
-    try:
-        return browser.open_url(address)
-    except ValueError as error:
-        return f"error: {error}"
-
-
-def search_web(query: str) -> str:
-    query = query.strip()
-    if not query:
-        return "error: nothing to search for"
-    return open_website("https://www.google.com/search?q=" + quote_plus(query))
-
-
 def play_music(query: str) -> str:
     query = query.strip()
     if not query:
@@ -83,49 +68,16 @@ def play_music(query: str) -> str:
     if song is None:
         return f"error: no song found for {query!r}"
     browser.pause_if_playing()  # otherwise the old song keeps playing under the new one
-    opened = open_website(song.url)
-    if opened.startswith("error"):
-        return opened
+    try:
+        browser.open_url(song.url)
+    except ValueError as error:
+        return f"error: {error}"
     if browser.wait_for_playing(True, 8):
         return f"playing '{song.title}' by {song.artist}"
     return (
         f"opened '{song.title}' by {song.artist}, but no sound started within 8 seconds; "
         "Firefox may be blocking autoplay for music.youtube.com"
     )
-
-
-def browser_control(action: str) -> str:
-    """Pause, resume, skip and scroll. Play/Pause is a toggle, so "pause" must never
-    start music and "resume" must never pause it: they check the playing state first."""
-    if action == "pause":
-        # a song change makes the state blink off for a moment, so give it time to return
-        if not browser.wait_for_playing(True, 1.5):
-            return "nothing is playing"
-        browser.press_media_key("play_pause")
-        return (
-            "paused"
-            if browser.wait_for_playing(False, 3)
-            else "error: the music did not pause"
-        )
-    if action == "resume":
-        if browser.is_playing():
-            return "already playing"
-        browser.press_media_key("play_pause")
-        if browser.wait_for_playing(True, 3):
-            return "resumed"
-        return "error: nothing resumed; there may be no paused music"
-    if action in ("next", "previous"):
-        browser.press_media_key(action)  # not a toggle, so no need to check first
-        if browser.wait_for_playing(True, 5):
-            return f"skipped to the {action} song"
-        return "error: nothing is playing; there may be no music to skip"
-    if action in ("scroll_down", "scroll_up"):
-        return browser.scroll(action.removeprefix("scroll_"))
-    return f"error: unknown action {action!r}"
-
-
-def web_answer(kind: str, query: str, language: str) -> str:
-    return web.web_answer(kind, query, language)
 
 
 def lock_pc() -> str:
@@ -180,17 +132,6 @@ TOOLS: dict[str, Tool] = {
         required=["direction"],
     ),
     "lock_pc": _tool(lock_pc, "Lock the Windows screen."),
-    "open_website": _tool(
-        open_website,
-        "Open a web page in the browser for the user to look at. It cannot read the page.",
-        properties={
-            "address": {
-                "type": "string",
-                "description": "Full web address, for example https://www.youtube.com",
-            }
-        },
-        required=["address"],
-    ),
     "play_music": _tool(
         play_music,
         "Play a song on YouTube Music in the browser. Give the song title and artist "
@@ -202,69 +143,6 @@ TOOLS: dict[str, Tool] = {
                 "description": "Song title and/or artist, without words like 'play'",
             }
         },
-        required=["query"],
-    ),
-    "web_answer": _tool(
-        web_answer,
-        "Look something up on the internet and get a short answer to say aloud. Use "
-        "it for the latest news, and whenever the user asks you to look up, find "
-        "out or search the internet for a question they want answered, such as who "
-        "someone is or when something happened: 'search the web and tell me who "
-        "built the Eiffel Tower' and 'cari di internet siapa itu Chairil Anwar' both "
-        "use this tool. It does "
-        "not open anything on screen.",
-        properties={
-            "kind": {
-                "type": "string",
-                "enum": ["news", "facts"],
-                "description": "news = current headlines; facts = encyclopedia answer",
-            },
-            "query": {
-                "type": "string",
-                "description": "news: a short topic, or empty for the top stories; "
-                "facts: the user's question in full",
-            },
-            "language": {
-                "type": "string",
-                "enum": ["en", "id"],
-                "description": "The language the user is speaking",
-            },
-        },
-        required=["kind", "query", "language"],
-    ),
-    "browser_control": _tool(
-        browser_control,
-        "Remote control for the music and the browser: pause or resume the music, "
-        "skip to the next or previous song, or scroll the page down or up. "
-        "'Stop the music' and 'matikan musik' mean pause. "
-        "'Skip this song', 'ganti lagu' and 'lagu berikutnya' mean next. "
-        "'Lagu sebelumnya' and 'go back one song' mean previous.",
-        properties={
-            "action": {
-                "type": "string",
-                "enum": [
-                    "pause",
-                    "resume",
-                    "next",
-                    "previous",
-                    "scroll_down",
-                    "scroll_up",
-                ],
-            }
-        },
-        required=["action"],
-    ),
-    "search_web": _tool(
-        search_web,
-        # Without the "only when asked" wording the 4B model opened Google for
-        # trivia and jokes (4 of 10 ordinary questions); with it, none.
-        "Open a Google results page on screen for the user to read themselves. "
-        "Use it only when the user asks to google something or to see search "
-        "results. When the user wants to be told the answer or the news, use "
-        "web_answer instead. Questions you can answer yourself (facts, "
-        "explanations, jokes, chat) get a normal spoken answer, never a search. "
-        "It cannot read the results or answer the question.",
-        properties={"query": {"type": "string", "description": "What to search for"}},
         required=["query"],
     ),
     "wake_screen": _tool(
