@@ -414,5 +414,6 @@ After the user's decision (a successful forget clears the history, `History.clea
 
 ## Checkpoint: Memory and web guard complete
 - [ ] All 9 success criteria in `docs/SPEC-memory.md` pass
+  - 7 of 9 met. #4 (Indonesian secret) was closed 2026-10-18 with the real model: "kata sandi wifi", a 16-digit KTP number and "PIN ATM", 2 runs each, all refused in Indonesian, nothing stored. Still partly met: #5 (unit tests only, no real injected page) and #7 (no real public-to-private redirect, refusal not heard through `uv run jarvis`).
 - [x] `check_tools.py 3` 0 wrong and `check_conversation.py 3` 75/75 and 75/75, each repeated (Task 19 Result: `check_tools.py 3` x4 wrong 0 of 126, `check_conversation.py 3` 3 runs; nothing since changed a prompt or description)
 - [ ] Human review
