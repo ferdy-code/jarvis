@@ -41,6 +41,10 @@ class History:
                 continue  # one damaged row must not stop Jarvis starting
         return turns
 
+    def clear(self) -> None:
+        with closing(db.connect(self.path)) as conn, conn:
+            conn.execute("DELETE FROM turns")
+
     def save(self, turn: list[dict]) -> None:
         with closing(db.connect(self.path)) as conn, conn:
             conn.execute(

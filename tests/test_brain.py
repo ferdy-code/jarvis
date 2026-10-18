@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 import httpx2  # the HTTP layer openai 3.x is built on
 import openai
+import pytest
 
 from jarvis.brain import (
     FACTS_LABEL,
@@ -529,10 +530,18 @@ def test_a_server_that_is_down_is_traced_as_a_failed_model_call(tmp_path):
 class FakeStore:
     """An in-memory stand-in for History."""
 
-    def __init__(self, turns=None, load_error=None, save_error=None):
+    def __init__(self, turns=None, load_error=None, save_error=None, clear_error=None):
         self.turns = list(turns or [])
         self.load_error = load_error
         self.save_error = save_error
+        self.clear_error = clear_error
+        self.saved = []
+        self.clears = 0
+
+    def clear(self):
+        if self.clear_error:
+            raise self.clear_error
+        self.clears += 1
         self.saved = []
 
     def load(self):
@@ -797,3 +806,62 @@ def test_remember_and_forget_turns_are_neither_kept_nor_saved():
 
     assert brain.history == []
     assert store.saved == []
+
+
+def forget_brain(store, result, name="forget"):
+    """A brain whose second turn calls `name`, which returns `result`."""
+    client = FakeClient(["Your cat is Mochi.", call(name), "Done."])
+    tools = {name: named_tool(name, lambda: result)}
+    return Brain(client, model="m", tools=tools, history=store)
+
+
+def ask_then_forget(brain):
+    brain.ask("what is my cat called?")
+    assert len(brain.history) == 1
+    brain.ask("forget the cat")
+
+
+def test_a_forget_that_removed_something_clears_the_conversation_everywhere():
+    store = FakeStore()
+    brain = forget_brain(store, "forgot: my cat is called Mochi")
+
+    ask_then_forget(brain)
+
+    assert brain.history == []
+    assert store.clears == 1
+    assert store.saved == []
+
+
+@pytest.mark.parametrize("result", ["nothing matched", "error: disk gone"])
+def test_a_forget_that_removed_nothing_keeps_the_conversation(result):
+    store = FakeStore()
+    brain = forget_brain(store, result)
+
+    ask_then_forget(brain)
+
+    assert len(brain.history) == 1
+    assert store.clears == 0
+    assert len(store.saved) == 1
+
+
+def test_another_tool_whose_result_starts_with_forgot_does_not_clear():
+    store = FakeStore()
+    brain = forget_brain(store, "forgot: something", name="remember")
+
+    ask_then_forget(brain)
+
+    assert len(brain.history) == 1
+    assert store.clears == 0
+
+
+def test_a_failing_clear_is_reported_and_the_reply_still_comes_back(capsys):
+    store = FakeStore(clear_error=OSError("disk full"))
+    brain = forget_brain(store, "forgot: my cat is called Mochi")
+
+    brain.ask("what is my cat called?")
+
+    assert brain.ask("forget the cat") == "Done."
+    assert brain.history == []
+    assert (
+        "Could not clear the saved conversation: disk full" in capsys.readouterr().out
+    )

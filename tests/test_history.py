@@ -84,3 +84,15 @@ def test_a_corrupt_row_is_skipped(tmp_path):
     history.save(turn(1))
 
     assert history.load() == [turn(0), turn(1)]
+
+
+def test_clear_removes_every_saved_turn(tmp_path):
+    history = make(tmp_path)
+    history.save(turn(1))
+    history.save(turn(2))
+
+    history.clear()
+
+    assert history.load() == []
+    with closing(db.connect(history.path)) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM turns").fetchone() == (0,)

@@ -89,7 +89,7 @@ class Brain:
         # call a tool and began answering "Musik sudah dipause" without calling one.
         # Whole turns are trimmed together, so a tool call is never cut from its result.
         self.history: list[list[dict]] = []
-        # Anything with load() and save(turn); the brain itself does no file I/O.
+        # Anything with load(), save(turn) and clear(); the brain itself does no file I/O.
         self._store = history
         # Called on every ask, so a fact remembered a moment ago is in the next prompt.
         self._facts = facts
@@ -117,7 +117,10 @@ class Brain:
             return OFFLINE_MESSAGE
         turn = [*messages[start:], {"role": "assistant", "content": reply}]
         used = _tools_used(turn)
-        if not used & FORGOTTEN_TOOLS:
+        if _forgot_something(turn):
+            # A saved turn that repeated the forgotten fact would bring it back after a restart.
+            self._clear_history()
+        elif not used & FORGOTTEN_TOOLS:
             self.history = [*self.history, turn][-MAX_TURNS:]
             if self._store is not None and not used & UNSAVED_TOOLS:
                 self._save(turn)
@@ -131,6 +134,15 @@ class Brain:
         except Exception as error:  # noqa: BLE001 - a bad disk must not stop the answers
             print(f"Could not read the remembered facts: {error}")
             return []
+
+    def _clear_history(self) -> None:
+        self.history = []
+        if self._store is None:
+            return
+        try:
+            self._store.clear()
+        except Exception as error:  # noqa: BLE001 - a bad disk must not lose the reply
+            print(f"Could not clear the saved conversation: {error}")
 
     def _save(self, turn: list[dict]) -> None:
         try:
@@ -223,6 +235,22 @@ def _tools_used(messages: list[dict]) -> set[str]:
         for message in messages
         for call in message.get("tool_calls", [])
     }
+
+
+def _forgot_something(turn: list[dict]) -> bool:
+    """True when a call named forget got a "forgot: ..." result in this turn."""
+    ids = {
+        call["id"]
+        for message in turn
+        for call in message.get("tool_calls", [])
+        if call["function"]["name"] == "forget"
+    }
+    return any(
+        message.get("role") == "tool"
+        and message.get("tool_call_id") in ids
+        and message["content"].startswith("forgot:")
+        for message in turn
+    )
 
 
 def _assistant_message(message) -> dict:
