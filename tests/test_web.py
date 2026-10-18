@@ -39,7 +39,7 @@ def fake_web(monkeypatch, body, client=None):
     calls = []
     client = client or FakeClient()
 
-    def fake_get(url, params=None, limit=0):
+    def fake_get(url, params=None, limit=0, opener=None):
         calls.append((url, params))
         return body
 
@@ -176,7 +176,7 @@ def test_a_page_with_thin_text_is_not_summarised(monkeypatch):
     ],
 )
 def test_a_fetch_failure_is_reported_not_guessed(monkeypatch, error, wording):
-    def broken(url, params=None, limit=0):
+    def broken(url, params=None, limit=0, opener=None):
         raise error
 
     client = FakeClient()
@@ -227,7 +227,7 @@ def test_nothing_found_is_reported_without_asking_the_model(monkeypatch):
 
 
 def test_a_network_failure_becomes_an_error_result(monkeypatch):
-    def broken(url, params=None, limit=0):
+    def broken(url, params=None, limit=0, opener=None):
         raise OSError("no internet")
 
     monkeypatch.setattr(web, "_get", broken)
@@ -239,3 +239,33 @@ def test_an_unknown_kind_is_refused(monkeypatch):
     fake_web(monkeypatch, RSS)
 
     assert web.web_lookup("weather", "", "en").startswith("error: kind must be")
+
+
+@pytest.fixture(autouse=True)
+def resolves_to(monkeypatch):
+    """Page tests never touch DNS: every name resolves to the address set here."""
+    answer = ["93.184.215.14"]
+    monkeypatch.setattr(
+        "socket.getaddrinfo",
+        lambda host, port, **kw: [(2, 1, 6, "", (answer[0], port))],
+    )
+    return answer
+
+
+def test_a_private_address_is_refused_and_nothing_is_fetched(monkeypatch, resolves_to):
+    calls, client = fake_web(monkeypatch, ARTICLE.encode())
+    resolves_to[0] = "127.0.0.1"
+
+    answer = web.web_lookup("page", "http://127.0.0.1:11435/v1/models", "en")
+
+    assert answer == (
+        "error: could not read that page (blocked: that address is on a private "
+        "network). Tell the user so and call no more tools."
+    )
+    assert calls == [] and client.requests == []
+
+
+def test_a_public_address_is_still_read(monkeypatch):
+    fake_web(monkeypatch, ARTICLE.encode(), FakeClient("Jakarta is the capital."))
+
+    assert "Jakarta is the capital." in web.web_lookup("page", "detik.com", "en")

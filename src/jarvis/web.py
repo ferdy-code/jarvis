@@ -16,7 +16,7 @@ from html.parser import HTMLParser
 
 import openai
 
-from jarvis import config
+from jarvis import config, netguard
 
 TIMEOUT = 8  # seconds per network step; the answer is spoken, so waiting is costly
 HEADLINES = 6
@@ -90,11 +90,17 @@ def page_address(spoken: str) -> str:
     return address
 
 
-def _get(url: str, params: dict | None = None, limit: int = PAGE_BYTES) -> bytes:
+GUARDED = urllib.request.build_opener(netguard.GuardedRedirectHandler)
+
+
+def _get(
+    url: str, params: dict | None = None, limit: int = PAGE_BYTES, opener=None
+) -> bytes:
     if params:
         url = f"{url}?{urllib.parse.urlencode(params)}"
     request = urllib.request.Request(url, headers=HEADERS)
-    with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+    open_ = opener or urllib.request.urlopen
+    with open_(request, timeout=TIMEOUT) as response:
         return response.read(limit)
 
 
@@ -128,7 +134,10 @@ def wiki(topic: str, lang: str) -> str:
 
 def page(address: str) -> str:
     """The readable text of one page, cut to what the model can be shown."""
-    text = readable_text(_get(address).decode("utf-8", errors="replace"))
+    netguard.check_public(address)  # the address may come from injected page text
+    text = readable_text(
+        _get(address, opener=GUARDED.open).decode("utf-8", errors="replace")
+    )
     if len(text) < THIN_PAGE:
         raise ValueError("it has almost no text (a login, a paywall or JavaScript)")
     return text[:PAGE_CHARS]
