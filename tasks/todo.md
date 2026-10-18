@@ -300,17 +300,17 @@ Spec: [docs/SPEC-memory.md](../docs/SPEC-memory.md) · Plan: [plan.md](plan.md#i
 
 **Before Task 16:** commit the pending tracing change (`uv run pytest tests/test_trace.py -q` passes) so each task's commit holds only its own files.
 
-### Task 16: Database foundation
+### Task 16: Database foundation ✅
 **Description:** `db.connect(path)` opens or creates the SQLite file with schema v1 (`turns`, `facts`) and refuses a newer `user_version`. `config.DB_FILE` reads `JARVIS_DB_FILE` (default `data/jarvis.sqlite3`; `off` or empty gives `None`), with the same pattern as `TRACE_FILE`. Nothing uses the database yet.
 
 **Acceptance criteria:**
-- [ ] The schema is created once and data survives reopening; a database with `user_version` 2 raises a clear error and is not changed
-- [ ] `JARVIS_DB_FILE=off` and `JARVIS_DB_FILE=` both give `config.DB_FILE is None`
-- [ ] README settings table has the `JARVIS_DB_FILE` row; `.gitignore` has `data/`
+- [x] The schema is created once and data survives reopening; a database with `user_version` 2 raises a clear error and is not changed
+- [x] `JARVIS_DB_FILE=off` and `JARVIS_DB_FILE=` both give `config.DB_FILE is None`
+- [x] README settings table has the `JARVIS_DB_FILE` row; `.gitignore` has `data/`
 
 **Verification:**
-- [ ] `uv run pytest -q tests/test_db.py tests/test_readme.py`, then the full `uv run pytest -q` and `uv run ruff check src tests`
-- [ ] Manual: `uv run python -c "from jarvis import db; db.connect('data/x.sqlite3')"` creates the file; `git status` does not show `data/`
+- [x] `uv run pytest -q tests/test_db.py tests/test_readme.py`, then the full `uv run pytest -q` and `uv run ruff check src tests`
+- [x] Manual: `uv run python -c "from jarvis import db; db.connect('data/x.sqlite3')"` creates the file; `git status` does not show `data/`
 
 **Dependencies:** none (commit the tracing change first)
 **Files:** `src/jarvis/db.py`, `src/jarvis/config.py`, `tests/test_db.py`, `README.md`, `.gitignore`

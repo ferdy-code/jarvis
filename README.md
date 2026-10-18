@@ -78,6 +78,7 @@ All settings are environment variables, and all are optional. In PowerShell:
 | `JARVIS_WAKE_THRESHOLD` | `0.5` | How sure the wake word must be (0 to 1) |
 | `JARVIS_FIREFOX_PROFILE` | `Keina Nara` | Firefox profile that pages open in, by the name Firefox shows. Empty means the default browser |
 | `JARVIS_TRACE_FILE` | `logs/trace.jsonl` | Where the trace of each turn is appended. `off` turns tracing off |
+| `JARVIS_DB_FILE` | `data/jarvis.sqlite3` | Where the conversation history and remembered facts are kept. `off` turns memory off |
 
 To use OpenAI instead of the local model, set `JARVIS_BASE_URL=https://api.openai.com/v1`,
 `JARVIS_MODEL` and `JARVIS_API_KEY`. For a non-local address Jarvis stops sending the

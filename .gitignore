@@ -13,3 +13,6 @@ wheels/
 
 # Turn traces (what was said)
 logs/
+
+# Conversation history and remembered facts (what was said)
+data/

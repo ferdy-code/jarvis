@@ -18,6 +18,10 @@ FIREFOX_PROFILE = os.environ.get("JARVIS_FIREFOX_PROFILE", "Keina Nara")
 # Windows cannot keep an empty variable, so "off" is how you turn it off there.
 _trace_file = os.environ.get("JARVIS_TRACE_FILE", "logs/trace.jsonl")
 TRACE_FILE = None if _trace_file.strip().lower() in {"", "off"} else _trace_file
+# SQLite file holding the conversation history and remembered facts (plain text, this PC only).
+# Windows cannot keep an empty variable, so "off" is how you turn it off there.
+_db_file = os.environ.get("JARVIS_DB_FILE", "data/jarvis.sqlite3")
+DB_FILE = None if _db_file.strip().lower() in {"", "off"} else _db_file
 
 # Only llama.cpp gets these; a hosted API may reject them. Temperature 0 makes
 # tool choice repeatable: at 0.7 the model sometimes asked to shut the PC down
