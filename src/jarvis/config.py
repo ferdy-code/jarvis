@@ -14,6 +14,10 @@ WAKE_THRESHOLD = float(os.environ.get("JARVIS_WAKE_THRESHOLD", "0.5"))
 # Pages open in this Firefox profile (the name Firefox shows). Without it, Windows
 # hands a link to whichever profile answers first, which changes from one time to the next.
 FIREFOX_PROFILE = os.environ.get("JARVIS_FIREFOX_PROFILE", "Keina Nara")
+# One JSON line per turn (what was said, each model call and tool, how long each took).
+# Windows cannot keep an empty variable, so "off" is how you turn it off there.
+_trace_file = os.environ.get("JARVIS_TRACE_FILE", "logs/trace.jsonl")
+TRACE_FILE = None if _trace_file.strip().lower() in {"", "off"} else _trace_file
 
 # Only llama.cpp gets these; a hosted API may reject them. Temperature 0 makes
 # tool choice repeatable: at 0.7 the model sometimes asked to shut the PC down

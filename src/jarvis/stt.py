@@ -7,7 +7,7 @@ import sys
 
 import numpy as np
 
-from jarvis import config
+from jarvis import config, trace
 from jarvis.mic import BLOCK, SAMPLE_RATE, open_stream
 
 END_SILENCE_S = 1.0
@@ -138,14 +138,23 @@ def listen(stream=None, after_wake: bool = False) -> tuple[str, str]:
     word, so the chime cannot start or end it.
     """
     model = _model()
-    if stream is None:
-        with open_stream() as own:
-            audio = _record_from(own, after_wake)
-    else:
-        audio = _record_from(stream, after_wake)
+    # "record" runs from the end of the chime until you stop talking, so it includes
+    # how long you spoke; "transcribe" is the time Whisper itself needed.
+    with trace.span("record") as recording:
+        if stream is None:
+            with open_stream() as own:
+                audio = _record_from(own, after_wake)
+        else:
+            audio = _record_from(stream, after_wake)
+        recording.set(
+            audio_s=None if audio is None else round(len(audio) / SAMPLE_RATE, 1)
+        )
     if audio is None:
         return "", "en"
-    return transcribe(model, audio)
+    with trace.span("transcribe") as transcription:
+        text, lang = transcribe(model, audio)
+        transcription.set(lang=lang, chars=len(text))
+    return text, lang
 
 
 def _record_from(stream, after_wake: bool = False) -> np.ndarray | None:

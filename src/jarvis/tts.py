@@ -1,7 +1,7 @@
 import functools
 import re
 
-from jarvis import config
+from jarvis import config, trace
 from jarvis.language import detect_language
 
 SUPPORTED_LANGS = {"en", "id"}
@@ -85,6 +85,8 @@ def speak(text: str, lang: str, voice: str | None = None) -> None:
     lang = lang if lang in SUPPORTED_LANGS else "en"
     if lang == "id":
         text = spell_numbers_id(text)
-    wav, _ = model.synthesize(text, voice_style=style, lang=lang)
-    sounddevice.play(wav.squeeze(), model.sample_rate)
-    sounddevice.wait()
+    with trace.span("synthesize", chars=len(text), lang=lang):
+        wav, _ = model.synthesize(text, voice_style=style, lang=lang)
+    with trace.span("play"):
+        sounddevice.play(wav.squeeze(), model.sample_rate)
+        sounddevice.wait()

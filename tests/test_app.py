@@ -325,3 +325,84 @@ def test_a_success_resets_the_failure_count(monkeypatch):
     room.assistant.voice_loop()
 
     assert len(attempts) == 6
+
+
+def test_a_typed_turn_is_traced_with_its_text_and_reply(tmp_path):
+    import json
+
+    class EchoBrain:
+        def ask(self, text, lang=None):
+            return f"echo: {text}"
+
+    path = tmp_path / "trace.jsonl"
+    assistant = Assistant(make_brain=lambda confirm: EchoBrain(), trace_path=path)
+
+    assistant.reply_to("hello", "typed")
+
+    record = json.loads(path.read_text(encoding="utf-8"))
+    assert (record["source"], record["text"], record["reply"]) == (
+        "typed",
+        "hello",
+        "echo: hello",
+    )
+
+
+def test_without_a_trace_path_no_file_is_made(tmp_path, monkeypatch):
+    class EchoBrain:
+        def ask(self, text, lang=None):
+            return text
+
+    monkeypatch.chdir(tmp_path)
+    assistant = Assistant(make_brain=lambda confirm: EchoBrain())
+
+    assistant.reply_to("hello", "typed")
+
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_a_voice_turn_is_traced_from_the_wake_word_to_the_reply(tmp_path):
+    import json
+
+    room = Room(heard=("Hey Jarvis, what time is it?", "en"))
+    room.assistant.trace_path = tmp_path / "trace.jsonl"
+
+    room.assistant.voice_once()
+
+    [line] = room.assistant.trace_path.read_text(encoding="utf-8").splitlines()
+    record = json.loads(line)
+    assert record["source"] == "voice"
+    assert record["heard"] == "Hey Jarvis, what time is it?"
+    assert record["text"] == "what time is it?"
+    assert record["lang"] == "en"
+    assert record["reply"] == "ok"
+
+
+def test_a_wake_word_that_led_to_nothing_is_still_traced(tmp_path):
+    import json
+
+    room = Room(heard=("", "en"))
+    room.assistant.trace_path = tmp_path / "trace.jsonl"
+
+    room.assistant.voice_once()
+
+    [line] = room.assistant.trace_path.read_text(encoding="utf-8").splitlines()
+    record = json.loads(line)
+    assert record["source"] == "voice"
+    assert record["heard"] == ""
+    assert "reply" not in record
+
+
+def test_a_spoken_confirmation_is_traced_with_its_answer(tmp_path):
+    import json
+
+    room = Room(
+        heard=[("restart the pc", "en"), ("yes", "en")], danger="power(action=restart)"
+    )
+    room.assistant.trace_path = tmp_path / "trace.jsonl"
+
+    room.assistant.voice_once()
+
+    record = json.loads(room.assistant.trace_path.read_text(encoding="utf-8"))
+    [confirm] = [span for span in record["spans"] if span["name"] == "confirm"]
+    assert confirm["action"] == "power(action=restart)"
+    assert confirm["answer"] is True

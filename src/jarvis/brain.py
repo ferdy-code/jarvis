@@ -3,6 +3,7 @@ from collections.abc import Callable
 
 import openai
 
+from jarvis import trace
 from jarvis.language import detect_language
 from jarvis.tools import Tool
 
@@ -117,9 +118,22 @@ class Brain:
         }
         if with_tools and self.tools:
             request["tools"] = [tool.schema for tool in self.tools.values()]
-        return self.client.chat.completions.create(**request).choices[0].message
+        with trace.span("llm", with_tools=with_tools) as span:
+            message = self.client.chat.completions.create(**request).choices[0].message
+            span.set(
+                tool_calls=[call.function.name for call in message.tool_calls or []]
+            )
+        return message
 
     def _run_tool(self, tool_call) -> str:
+        name = tool_call.function.name
+        arguments = trace.preview(tool_call.function.arguments or "{}")
+        with trace.span("tool", tool=name, arguments=arguments) as span:
+            result = self._execute(tool_call)
+            span.set(status=_status(result), result=trace.preview(result))
+        return result
+
+    def _execute(self, tool_call) -> str:
         name = tool_call.function.name
         tool = self.tools.get(name)
         if tool is None:
@@ -140,6 +154,15 @@ class Brain:
             return False
         details = ", ".join(f"{key}={value}" for key, value in arguments.items())
         return self.confirm(f"{name}({details})")
+
+
+def _status(result: str) -> str:
+    """How a tool call ended, from the text it returned."""
+    if result.startswith("error:"):
+        return "error"
+    if result == "cancelled by user":
+        return "cancelled"
+    return "ok"
 
 
 def _tools_used(messages: list[dict]) -> set[str]:

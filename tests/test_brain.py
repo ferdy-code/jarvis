@@ -459,3 +459,61 @@ def test_a_tool_call_written_out_twice_gives_a_plain_apology():
     reply = Brain(client, model="m", tools={"t": tool(lambda: "x")}).ask("who?")
 
     assert reply == GIVE_UP_MESSAGE
+
+
+def traced_spans(tmp_path, run):
+    """Run `run` inside a traced turn and return the spans it recorded."""
+    import json
+
+    from jarvis import trace
+
+    path = tmp_path / "trace.jsonl"
+    with trace.turn(path, "typed"):
+        run()
+    return json.loads(path.read_text(encoding="utf-8"))["spans"]
+
+
+def test_a_tool_turn_is_traced_model_call_tool_then_model_call(tmp_path):
+    client = FakeClient([call("t", '{"x": 1}'), "Done."])
+    brain = Brain(client, model="m", tools={"t": tool(lambda x: f"got {x}")})
+
+    spans = traced_spans(tmp_path, lambda: brain.ask("go"))
+
+    assert [span["name"] for span in spans] == ["llm", "tool", "llm"]
+    assert spans[0]["tool_calls"] == ["t"]
+    assert spans[1]["tool"] == "t"
+    assert spans[1]["arguments"] == '{"x": 1}'
+    assert spans[1]["status"] == "ok"
+    assert spans[1]["result"] == "got 1"
+    assert spans[2]["tool_calls"] == []
+
+
+def test_a_failing_tool_is_traced_as_an_error(tmp_path):
+    def broken():
+        raise RuntimeError("boom")
+
+    client = FakeClient([call("t"), "Sorry."])
+    brain = Brain(client, model="m", tools={"t": tool(broken)})
+
+    spans = traced_spans(tmp_path, lambda: brain.ask("go"))
+
+    assert spans[1]["status"] == "error"
+    assert spans[1]["result"] == "error: boom"
+
+
+def test_a_refused_dangerous_tool_is_traced_as_cancelled(tmp_path):
+    client = FakeClient([call("t"), "Okay, not doing it."])
+    brain = Brain(client, model="m", tools={"t": tool(lambda: "x", dangerous=True)})
+
+    spans = traced_spans(tmp_path, lambda: brain.ask("go"))
+
+    assert spans[1]["status"] == "cancelled"
+
+
+def test_a_server_that_is_down_is_traced_as_a_failed_model_call(tmp_path):
+    brain = Brain(FakeClient(error=connection_error()), model="m")
+
+    spans = traced_spans(tmp_path, lambda: brain.ask("hi"))
+
+    assert spans[0]["name"] == "llm"
+    assert spans[0]["error"] == "APIConnectionError"

@@ -77,6 +77,7 @@ All settings are environment variables, and all are optional. In PowerShell:
 | `JARVIS_MIC_THRESHOLD` | `0.003` | Loudness that counts as speech (0 to 1) |
 | `JARVIS_WAKE_THRESHOLD` | `0.5` | How sure the wake word must be (0 to 1) |
 | `JARVIS_FIREFOX_PROFILE` | `Keina Nara` | Firefox profile that pages open in, by the name Firefox shows. Empty means the default browser |
+| `JARVIS_TRACE_FILE` | `logs/trace.jsonl` | Where the trace of each turn is appended. `off` turns tracing off |
 
 To use OpenAI instead of the local model, set `JARVIS_BASE_URL=https://api.openai.com/v1`,
 `JARVIS_MODEL` and `JARVIS_API_KEY`. For a non-local address Jarvis stops sending the
@@ -91,6 +92,9 @@ OpenAI itself, and the system prompt was tuned for the small local model.
   requests. Only "y", "yes", "yeah", "ya" or "iya" count. Anything else, including
   silence, cancels.
 - Microphone audio is only kept in memory while it is processed, never written to disk.
+- Each turn is traced to a file on your PC: what you said and Jarvis replied, the tools it
+  ran with their results (cut to 200 characters), and how long each step took. Delete the
+  file whenever you like, or turn tracing off in Settings. It is not sent anywhere.
 - Your conversation stays on your PC unless you point `JARVIS_BASE_URL` somewhere else. The
   only things sent out are the song name you ask for (to YouTube Music, to find it), the
   topic or address of a web request (to Google News, Wikipedia or that site), and the pages

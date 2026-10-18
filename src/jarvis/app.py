@@ -2,11 +2,12 @@ import argparse
 import re
 import threading
 import time
+from contextlib import ExitStack
 
 import numpy as np
 import openai
 
-from jarvis import config, stt, tts, wake
+from jarvis import config, stt, trace, tts, wake
 from jarvis.brain import Brain
 from jarvis.mic import open_stream
 from jarvis.tools import TOOLS
@@ -70,6 +71,7 @@ class Assistant:
         chime=None,
         ask_terminal=confirm_in_terminal,
         open_mic=open_stream,
+        trace_path=None,
     ):
         self.lock = threading.Lock()  # one turn at a time, so speech never overlaps
         self.source = "typed"  # where the current turn came from
@@ -80,10 +82,17 @@ class Assistant:
         self.chime = chime
         self.ask_terminal = ask_terminal
         self.open_mic = open_mic
+        self.trace_path = trace_path  # where each turn is logged; None means nowhere
         self.brain = make_brain(self.confirm)
 
     def confirm(self, question: str) -> bool:
         """Ask the way the request came in: on the terminal, or aloud."""
+        with trace.span("confirm", action=question, source=self.source) as span:
+            answer = self._ask_confirmation(question)
+            span.set(answer=answer)
+        return answer
+
+    def _ask_confirmation(self, question: str) -> bool:
         if self.source != "voice":
             return self.ask_terminal(question)
         action = " ".join(re.sub(r"[()=_,]", " ", question).split())
@@ -98,9 +107,12 @@ class Assistant:
     def reply_to(self, text: str, source: str) -> None:
         with self.lock:
             self.source = source
-            reply = self.brain.ask(text)
-            print(f"jarvis> {reply}")
-            self._say(reply)
+            with trace.turn(self.trace_path, source) as turn:
+                turn.set(text=text)
+                reply = self.brain.ask(text)
+                turn.set(reply=reply)
+                print(f"jarvis> {reply}")
+                self._say(reply)
 
     def _say(self, text: str, lang: str | None = None) -> None:
         if self.speak is None:
@@ -116,20 +128,27 @@ class Assistant:
         # One open microphone from the wake word to the end of the command, so
         # nothing said right after "Hey Jarvis" is lost. It is closed before
         # Jarvis answers, so it does not record its own voice.
-        with self.open_mic() as mic:
+        with ExitStack() as stack, self.open_mic() as mic:
             self.wait_for_wake(mic)
             if self.lock.locked():
                 return  # Jarvis is talking, so this was most likely its own voice
+            # The trace starts at the wake word and outlives the microphone, so it also
+            # shows wake words that led to nothing, and how long recording and
+            # transcribing took.
+            turn = stack.enter_context(trace.turn(self.trace_path, "voice"))
             print("(wake word heard - speak now)")
             self.chime()
             heard, lang = self.listen(mic, after_wake=True)
-        text = without_wake_phrase(heard)
-        if not text:
-            print("(heard nothing)")
-            return
-        self.lang = lang
-        print(f"you (voice)> {text}")
-        self.reply_to(text, "voice")
+            mic_closed = stack.pop_all()  # hand the open turn on, past the microphone
+        with mic_closed:
+            text = without_wake_phrase(heard)
+            turn.set(heard=heard, lang=lang)
+            if not text:
+                print("(heard nothing)")
+                return
+            self.lang = lang
+            print(f"you (voice)> {text}")
+            self.reply_to(text, "voice")
 
     def voice_loop(self) -> None:
         failures = 0
@@ -211,6 +230,7 @@ def main() -> None:
         listen=stt.listen,
         wait_for_wake=wake.wait_for_wake_word,
         chime=chime,
+        trace_path=config.TRACE_FILE,
     )
     if listening:
         threading.Thread(target=assistant.voice_loop, daemon=True).start()

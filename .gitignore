@@ -10,3 +10,6 @@ wheels/
 .venv
 
 .claude/agent-memory/
+
+# Turn traces (what was said)
+logs/
