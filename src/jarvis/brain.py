@@ -7,6 +7,7 @@ from jarvis.language import detect_language
 from jarvis.tools import Tool
 
 OFFLINE_MESSAGE = "My brain is offline. Is LlamaStash running?"
+GIVE_UP_MESSAGE = "Sorry, I could not work that out."
 MAX_TURNS = 10
 MAX_TOOL_ROUNDS = 3
 
@@ -95,7 +96,9 @@ class Brain:
         for _ in range(MAX_TOOL_ROUNDS):
             message = self._complete(messages, with_tools=True)
             if not message.tool_calls:
-                return message.content or ""
+                if "<tool_call>" not in (message.content or ""):
+                    return message.content or ""
+                break  # a call to a tool that does not exist, written out as text
             messages.append(_assistant_message(message))
             for tool_call in message.tool_calls:
                 result = self._run_tool(tool_call)
@@ -103,7 +106,8 @@ class Brain:
                     {"role": "tool", "tool_call_id": tool_call.id, "content": result}
                 )
         # Too many tool rounds: make the model answer with what it has.
-        return self._complete(messages, with_tools=False).content or ""
+        reply = self._complete(messages, with_tools=False).content or ""
+        return GIVE_UP_MESSAGE if "<tool_call>" in reply else reply
 
     def _complete(self, messages: list[dict], with_tools: bool):
         request = {

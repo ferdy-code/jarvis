@@ -274,3 +274,20 @@ Plan: [plan.md](plan.md) · Spec: [SPEC.md](../SPEC.md)
 4. The reply language and a copied old time came back whenever a tool was added. The user's language is now told to the model when clear (`language.py`), and clock/battery turns are forgotten.
 5. Each new tool shifted older behaviour ("how do I restart my computer?", "goodnight" asking for a shutdown). Two prompt sentences fixed them; their order matters (language last).
 **Files:** `src/jarvis/brain.py`, `src/jarvis/browser.py`, `src/jarvis/tools.py`, `src/jarvis/language.py`, `src/jarvis/tts.py`, `tests/test_remote.py`, `tests/test_language.py`, `tests/test_brain.py`, `README.md`, `SPEC.md`
+
+### Task 15: Spoken web answers (Phase B) ✅
+**Description:** `web_answer(kind, query, language)` tool and `web.py`: fetch Google News headlines or Wikipedia openings, and have the model, with no tools, turn them into a short spoken answer that names its source.
+
+**Acceptance criteria:**
+- [x] News and facts answers in English and Indonesian from the real web in 2.4-3.7 s (real model, real network)
+- [x] The reading step is offered no tools and treats the excerpts as data
+- [x] Facts: 13 of 14 questions correct, the miss was an honest "not found"; unanswerable questions say they could not find it
+- [x] Tool choice: `scripts/check_tools.py 3` reads wrong 0 of 75 (web answers, every older tool, ordinary questions call nothing)
+- [x] No regression: `scripts/check_conversation.py 3` 75/75 and 75/75; 254 tests, ruff clean
+
+**Found on the way (real runs):**
+1. DuckDuckGo refuses connections on this network and Bing returned unrelated pages, so search-engine scraping was dropped for Google News RSS and Wikipedia.
+2. "cari di internet siapa itu X" opened Google (`search_web`) in 6 of 75 samples until both tool descriptions said which one answers aloud.
+3. A "not found" result made the main model open Google uninvited and write a tool call as text. The result now says to call no more tools, and `Brain` replaces a reply containing `<tool_call>` with a plain apology.
+4. The 4B reader once mixed two articles into a wrong date; "never combine facts from different articles" fixed it. The main model dropped the source's name until the result told it to keep it.
+**Files:** `src/jarvis/web.py`, `src/jarvis/tools.py`, `src/jarvis/brain.py`, `scripts/check_tools.py`, `tests/test_web.py`, `tests/test_brain.py`, `README.md`, `SPEC.md`, `docs/ideas/jarvis-browser.md`

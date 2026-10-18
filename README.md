@@ -3,8 +3,8 @@
 A personal assistant for your Windows PC that you can type to or talk to, in English or
 Indonesian. Say "Hey Jarvis" and a command, and it answers out loud. The language model,
 speech recognition and voice all run on your own machine, so chatting and controlling the PC
-work offline and cost nothing. Only the web features (music, opening pages, searching) need
-the internet.
+work offline and cost nothing. Only the web features (music, news and facts, opening pages,
+searching) need the internet.
 
 ## What it can do
 
@@ -14,6 +14,7 @@ the internet.
 - Turn the screen on when it is off ("wake up the screen", "nyalakan layar").
 - Play a song on YouTube Music ("putar lagu Tulus Hati-Hati di Jalan", "play Yellow by Coldplay"). A new request pauses the old song and opens the new one in a new Firefox tab.
 - Control the music and the page: "jeda musik" / "pause", "lanjutkan" / "resume", "lagu berikutnya" / "next song", "lagu sebelumnya", and "scroll down" / "gulir ke bawah".
+- Answer from the internet, out loud: the news ("berita hari ini apa?", "any news about Indonesia's economy?") from Google News, and facts ("look it up on the internet: who is Tulus?") from Wikipedia. The answer names its source. It reads only a few headlines or article openings, so a specific detail may get "I could not find it".
 - Open a web page ("open YouTube", "buka github.com") or search Google ("search for nasi goreng recipes") in Firefox. Only `http` and `https` pages are opened, and Jarvis does not read them.
 - Shut down or restart the PC, but only after you say yes.
 

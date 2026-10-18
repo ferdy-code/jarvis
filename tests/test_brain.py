@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import httpx2  # the HTTP layer openai 3.x is built on
 import openai
 
-from jarvis.brain import OFFLINE_MESSAGE, Brain
+from jarvis.brain import GIVE_UP_MESSAGE, OFFLINE_MESSAGE, Brain
 from jarvis.tools import Tool
 
 
@@ -210,6 +210,18 @@ def test_tool_calls_stop_after_three_rounds():
 
     assert reply == "Giving up."
     assert len(runs) == 3
+    assert "tools" not in client.requests[-1]
+
+
+def test_a_tool_call_written_out_as_text_is_never_spoken():
+    # After a web lookup with no answer the model once replied with a call to a tool
+    # that does not exist, as text: "<tool_call><function=web_search>...".
+    written = "<tool_call>\n<function=web_search></function>\n</tool_call>"
+    client = FakeClient([written, "I could not find that."])
+
+    reply = Brain(client, model="m", tools={"t": tool(lambda: "x")}).ask("who?")
+
+    assert reply == "I could not find that."
     assert "tools" not in client.requests[-1]
 
 
@@ -438,3 +450,12 @@ def test_trimming_the_history_never_separates_a_tool_call_from_its_result():
         if message["role"] == "tool":
             assert sent[position - 1]["role"] == "assistant"
             assert sent[position - 1]["tool_calls"][0]["id"] == message["tool_call_id"]
+
+
+def test_a_tool_call_written_out_twice_gives_a_plain_apology():
+    written = "<tool_call><function=web_search></function></tool_call>"
+    client = FakeClient([written, written])
+
+    reply = Brain(client, model="m", tools={"t": tool(lambda: "x")}).ask("who?")
+
+    assert reply == GIVE_UP_MESSAGE

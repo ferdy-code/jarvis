@@ -7,7 +7,7 @@ from urllib.parse import quote_plus
 import psutil
 from pycaw.pycaw import AudioUtilities
 
-from jarvis import browser, music
+from jarvis import browser, music, web
 
 
 @dataclass(frozen=True)
@@ -124,6 +124,10 @@ def browser_control(action: str) -> str:
     return f"error: unknown action {action!r}"
 
 
+def web_answer(kind: str, query: str, language: str) -> str:
+    return web.web_answer(kind, query, language)
+
+
 def lock_pc() -> str:
     subprocess.run(["rundll32.exe", "user32.dll,LockWorkStation"], check=True)
     return "locked"
@@ -200,6 +204,34 @@ TOOLS: dict[str, Tool] = {
         },
         required=["query"],
     ),
+    "web_answer": _tool(
+        web_answer,
+        "Look something up on the internet and get a short answer to say aloud. Use "
+        "it for the latest news, and whenever the user asks you to look up, find "
+        "out or search the internet for a question they want answered, such as who "
+        "someone is or when something happened: 'search the web and tell me who "
+        "built the Eiffel Tower' and 'cari di internet siapa itu Chairil Anwar' both "
+        "use this tool. It does "
+        "not open anything on screen.",
+        properties={
+            "kind": {
+                "type": "string",
+                "enum": ["news", "facts"],
+                "description": "news = current headlines; facts = encyclopedia answer",
+            },
+            "query": {
+                "type": "string",
+                "description": "news: a short topic, or empty for the top stories; "
+                "facts: the user's question in full",
+            },
+            "language": {
+                "type": "string",
+                "enum": ["en", "id"],
+                "description": "The language the user is speaking",
+            },
+        },
+        required=["kind", "query", "language"],
+    ),
     "browser_control": _tool(
         browser_control,
         "Remote control for the music and the browser: pause or resume the music, "
@@ -226,11 +258,11 @@ TOOLS: dict[str, Tool] = {
         search_web,
         # Without the "only when asked" wording the 4B model opened Google for
         # trivia and jokes (4 of 10 ordinary questions); with it, none.
-        "Search Google for the user by opening the results page in the browser. "
-        "Use it when the user asks to search, google or look something up online, "
-        "or asks about things you cannot know such as today's news or weather. "
-        "Questions you can answer yourself (facts, explanations, jokes, chat) get a "
-        "normal spoken answer, never a search. "
+        "Open a Google results page on screen for the user to read themselves. "
+        "Use it only when the user asks to google something or to see search "
+        "results. When the user wants to be told the answer or the news, use "
+        "web_answer instead. Questions you can answer yourself (facts, "
+        "explanations, jokes, chat) get a normal spoken answer, never a search. "
         "It cannot read the results or answer the question.",
         properties={"query": {"type": "string", "description": "What to search for"}},
         required=["query"],

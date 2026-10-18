@@ -77,7 +77,8 @@ accounts.
 - **Done: `open_website` and `search_web`**, plus the profile targeting. Checked with the real Firefox: the page opened in the Keina Nara window. Model sampling: 21/21 site requests with valid addresses, 15/15 searches, 30/30 ordinary questions opened nothing, and the other tools were unchanged.
 - **Done: `play_music(query)`** (2026-10-10). Real run: `playing 'Hati-Hati di Jalan' by Tulus` in 4.7 s; a second request paused it and played `Yellow` (tab title "Yellow | YouTube Music"). Model: 21/21 phrasings with clean queries.
 - **Done: `browser_control`** (2026-10-10): pause, resume, next, previous with the media keys, and scroll with Page Down/Up. Real Firefox: all worked, `next` changed the song, six scrolls in a row. Model: 96/96 phrasings, and "matikan musik" never asks to shut the PC down.
-- **Phase A is complete.** Phase B (spoken web answers, with the web-reading step given no tools) is not started and needs the open questions answered first (search source).
+- **Phase A is complete.**
+- **Done: Phase B, `web_answer`** (2026-10-18): spoken answers from Google News RSS (news) and Wikipedia (facts), summarised by a model call that has no tools. The search-source question was settled by testing: DuckDuckGo is blocked on this network and Bing returned unrelated pages, so the two documented feeds are used (free, no key, no new dependency). Real run: 2.4-3.7 s per answer, 13/14 fact questions correct, unanswerable ones answered "could not find it", tool choice 0 wrong of 75. Details in SPEC.md under `web`.
 
 ## Not Doing (and Why)
 
@@ -90,8 +91,7 @@ accounts.
 
 ## Open Questions
 
-- **Phase B search source:** free scraping (no key, but it breaks when sites change) or a
-  search API with a free key (sturdier, but the user would sign up)?
+- ~~**Phase B search source**~~ **Decided by testing (2026-10-18): Google News RSS + the Wikipedia API.** Neither needs a key; general web search engines could not be scraped here.
 - ~~**YouTube or YouTube Music**~~ **Decided (2026-10-10): YouTube Music.** It is a JavaScript app, so the first result cannot be read from a plain page. Candidates to test: the `ytmusicapi` library (unofficial, no login needed for search), or finding the track on youtube.com and opening it as `music.youtube.com/watch?v=ID`.
 - **Tabs:** should a new song replace the last one Jarvis opened, or open a new tab each time
   (they will pile up)?
