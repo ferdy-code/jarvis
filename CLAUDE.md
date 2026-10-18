@@ -12,6 +12,7 @@ Jarvis is a typed + voice ("Hey Jarvis") assistant for one Windows 11 PC, in Eng
 uv sync
 uv run jarvis                      # typed + voice
 uv run jarvis --no-voice           # typed only, starts in a second
+uv run jarvis --reset-memory       # asks, deletes saved facts + history, exits (no models load)
 uv run pytest -q                   # unit tests (no network, no audio)
 uv run pytest tests/test_brain.py::test_ask_returns_the_model_reply
 uv run ruff check                  # ~400 rules are on by default; also: uv run ruff format
@@ -20,8 +21,10 @@ uv run ruff check                  # ~400 rules are on by default; also: uv run 
 Checks against the real model (need LlamaStash running on :11435; run after ANY change to a tool, a tool description or `SYSTEM_PROMPT`):
 
 ```
-uv run python scripts/check_tools.py 3          # tool choice; must read "wrong: 0 of 84"
-uv run python scripts/check_conversation.py 3   # must read "fresh data 75/75, reply language 75/75"
+uv run python scripts/check_tools.py 3          # tool choice; must read "wrong: 0 of 126"; it flips between runs, so run it 4+ times
+uv run python scripts/check_conversation.py 3   # 3 lines, each must be full: "fresh data 75/75, reply language 75/75",
+                                                # "with facts: fresh data 75/75, reply language 75/75",
+                                                # "facts: right 18/18, reply language 27/27, unrelated clean 9/9"
 uv run python scripts/smoke_audio.py mic|stt|wake|tts   # manual audio checks
 ```
 
@@ -33,7 +36,7 @@ Set `PYTHONIOENCODING=utf-8` when scripts print Indonesian text, or the console 
 
 `brain.py` is the tool-call loop (max 3 rounds, then a no-tools completion). Non-obvious rules:
 
-- History is a list of whole turns (question, tool calls + results, reply), trimmed together. Keeping only reply text made the model claim actions without calling tools. Turns using `FORGOTTEN_TOOLS` (clock, battery) are not remembered.
+- History is a list of whole turns (question, tool calls + results, reply), trimmed together. Keeping only reply text made the model claim actions without calling tools. Turns using `FORGOTTEN_TOOLS` (clock, battery, remember, forget) are not remembered.
 - Tools with `dangerous=True` (`power`) only run after the `confirm` callback says yes; with no callback they never run.
 - A reply containing `<tool_call>` (the model writing a call as text) is replaced by `GIVE_UP_MESSAGE`, never spoken.
 - `language.detect_language` adds "The user is speaking X" to the system prompt when the words are clear.
@@ -46,6 +49,13 @@ Music playback:
 - `music.py`: `ytmusicapi` search; `play_music` pauses current music, opens the song URL, and reports success only after sound is actually playing.
 - `web.py`: the `web_lookup` tool (news = Google News RSS, wiki = Wikipedia openings, page = one http(s) address reduced to text with `html.parser`); the model summarises it with NO tools offered, text in `<web>` tags as data. Plain urllib, never imports `browser` (a test enforces it). DuckDuckGo is blocked on this network and Bing returned junk, so no search-engine scraping.
 Audio: `stt.py` (faster-whisper small, CUDA with CPU fallback; needs the nvidia-cublas/cudnn `bin` folders on PATH, VAD + vocabulary prompt + en/id re-decode to curb hallucinations), `wake.py` (openwakeword `hey_jarvis`, a fresh model per wait), `tts.py` (Supertonic, CPU; Indonesian digits are spelled out as words because it misreads them).
+
+Memory (off with `JARVIS_DB_FILE=off`: no file, no memory tools, prompt unchanged):
+
+- `db.py`: SQLite file (`data/jarvis.sqlite3`), tables `turns` and `facts`, one connection per operation; refuses a newer `user_version`.
+- `history.py`: saves each turn, keeps 100, loads the newest 10 under 12 h old. `FORGOTTEN_TOOLS` turns are neither kept nor saved; `UNSAVED_TOOLS` (`web_lookup`) are kept for the run but never written.
+- `facts.py` (max 30, 3-200 chars, `looks_secret`) + `memory_tools.py` (`remember`, `forget`; `Tool.refused_after` makes them error in a turn that called `web_lookup`, so a web page cannot write memory). The facts block goes before `SYSTEM_PROMPT` (language sentence still last); a successful `forget` clears the saved history, or the old chat would bring the fact back.
+- `netguard.py`: `web_lookup page` refuses non-public addresses and redirects to them.
 
 `config.py` reads all settings from `JARVIS_*` env vars. `tests/test_readme.py` fails unless README documents exactly those settings, so add new ones to README too. `EXTRA_BODY` (thinking off, temperature 0) is sent only when the base URL is local.
 

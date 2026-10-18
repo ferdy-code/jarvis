@@ -376,21 +376,23 @@ Spec: [docs/SPEC-memory.md](../docs/SPEC-memory.md) · Plan: [plan.md](plan.md#i
 **Result:** 370 tests pass; ruff clean. `check_conversation.py 3`, 3 runs, each: `fresh data 75/75, reply language 75/75` / `with facts: fresh data 75/75, reply language 75/75` / `facts: right 18/18, reply language 27/27, unrelated clean 9/9` (the first, label-only run read `facts: right 16/18`: the model called `remember` on "what kind of shifts do I work?"; fixed by adding "answer questions about it without calling a tool" to the label). `check_tools.py 3` x4: `wrong: 0 of 126` each time. Latency (timing `Brain.ask` directly, "how are you?", 7 alternating runs): median 0.394 s with no facts, 0.535 s with 30 facts, +0.141 s. Manual (typed, throwaway database): remember, then in a new process "what is my cat called?" -> "Your cat is called Mochi.", "kucingku namanya siapa?" -> "Kucing Anda bernama Mochi." (both right). After "forget the cat" the facts table was empty, but "what is my cat called?" in a new process still answered "Your cat is still named Mochi.": the saved ordinary turns from run 2 ("what is my cat called?" / "Your cat is called Mochi.") are loaded from history. With the turns table emptied it said it did not know. The label cannot help because with no facts there is no block.
 After the user's decision (a successful forget clears the history, `History.clear`, matched through `tool_call_id`): 376 tests pass, ruff clean. Manual, twice, throwaway database, one process per step: remember -> "I've remembered that your cat is called Mochi."; "what is my cat called?" -> "Your cat is called Mochi.", "kucingku namanya siapa?" -> "Kucing Anda bernama Mochi."; "forget the cat" -> "I have forgotten your cat's name." (second run: "I have forgotten that your cat is named Mochi."), then `facts` 0 rows and `turns` 0 rows; new process "what is my cat called?" -> "I don't know the name of your cat. I can only remember facts you explicitly ask me to store." both times. No prompt or tool description changed, so check_tools/check_conversation were not rerun.
 
-### Task 20: `--reset-memory` and the memory docs
+### Task 20: `--reset-memory` and the memory docs ✅
 **Description:** `uv run jarvis --reset-memory` asks `Delete all remembered facts and saved history? [y/N]` (via `is_yes`), empties both tables only after a clear yes, prints the result and exits without loading any model. Also: the README Safety section (what is stored, in plain text, only on this PC, and how to wipe it), the SPEC.md sections for `history`, `facts`, `memory_tools` and the prompt-injection rules, and the CLAUDE.md architecture notes.
 
 **Acceptance criteria:**
-- [ ] A "y" empties both tables; "n", an empty answer or anything unclear changes nothing; no model, client or audio is loaded (test_app)
-- [ ] With `config.DB_FILE = None`, no file is created and no memory tool is offered (test_app)
-- [ ] README, SPEC.md and CLAUDE.md match the code: every new module, setting and command is named, and nothing is documented that the code does not do
+- [x] A "y" empties both tables; "n", an empty answer or anything unclear changes nothing; no model, client or audio is loaded (test_app)
+- [x] With `config.DB_FILE = None`, no file is created and no memory tool is offered (test_app)
+- [x] README, SPEC.md and CLAUDE.md match the code: every new module, setting and command is named, and nothing is documented that the code does not do
 
 **Verification:**
-- [ ] `uv run pytest -q tests/test_app.py tests/test_readme.py`, then the full suite and ruff
-- [ ] Manual: `uv run jarvis --reset-memory`, answer `n` (data stays), run again and answer `y` (both tables empty); `JARVIS_DB_FILE=off uv run jarvis --no-voice` creates no file
+- [x] `uv run pytest -q tests/test_app.py tests/test_readme.py`, then the full suite and ruff
+- [x] Manual: `uv run jarvis --reset-memory`, answer `n` (data stays), run again and answer `y` (both tables empty); `JARVIS_DB_FILE=off uv run jarvis --no-voice` creates no file
 
 **Dependencies:** 19
-**Files:** `src/jarvis/app.py`, `tests/test_app.py`, `README.md`, `SPEC.md`, `CLAUDE.md`
+**Files:** `src/jarvis/app.py`, `src/jarvis/facts.py`, `src/jarvis/history.py`, `tests/test_app.py`, `tests/test_facts.py`, `tests/test_history.py`, `README.md`, `SPEC.md`, `CLAUDE.md`, `docs/SPEC-memory.md`
 **Scope:** S
+
+**Result:** 388 tests (376 before), ruff check and format clean. `reset_memory()` in `app.py` runs right after `parse_args`; `Facts.clear()` is new and `History.clear()` now returns its row count, so the message can say how many were deleted. Manual with a throwaway database (2 facts, 3 turns): `n` -> "Nothing was deleted." and the counts stayed 2 and 3; `y` -> "Deleted 2 facts and 3 saved turns." and both counts 0; a missing file was not created; `JARVIS_DB_FILE=off` printed that memory is off; `JARVIS_DB_FILE=off` with `--no-voice` and "exit" created no file. No prompt or tool description changed, so the real-model checks were not rerun. README, SPEC.md, CLAUDE.md and docs/SPEC-memory.md updated; README's "no memory between runs" and "cannot make Jarvis do anything" lines were wrong and are fixed.
 
 ### Task 21: Private-address guard for `web_lookup page` ✅ (the spoken refusal through the full Jarvis loop is left to the user)
 **Description:** `netguard.check_public(url)` resolves the host and raises `BlockedAddress` if any resolved address is not `is_global` (IPv4-mapped IPv6 is unwrapped first). A name that does not resolve is not reported as blocked. `GuardedRedirectHandler` checks every redirect target. `web.page()` checks first and fetches through the guarded opener; `news`/`wiki` are unchanged. SPEC.md: the Limits line is reversed with the reason, and DNS rebinding is written down as the known residual risk.
@@ -412,5 +414,5 @@ After the user's decision (a successful forget clears the history, `History.clea
 
 ## Checkpoint: Memory and web guard complete
 - [ ] All 9 success criteria in `docs/SPEC-memory.md` pass
-- [ ] `check_tools.py 3` 0 wrong and `check_conversation.py 3` 75/75 and 75/75, each repeated
+- [x] `check_tools.py 3` 0 wrong and `check_conversation.py 3` 75/75 and 75/75, each repeated (Task 19 Result: `check_tools.py 3` x4 wrong 0 of 126, `check_conversation.py 3` 3 runs; nothing since changed a prompt or description)
 - [ ] Human review

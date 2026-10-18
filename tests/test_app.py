@@ -2,6 +2,8 @@ import pytest
 
 from jarvis import app
 from jarvis.app import Assistant, is_yes, without_wake_phrase
+from jarvis.facts import Facts
+from jarvis.history import History
 
 
 @pytest.mark.parametrize("answer", ["y", "yes", "Yes.", " ya ", "iya", "YES!", "Yeah."])
@@ -406,3 +408,151 @@ def test_a_spoken_confirmation_is_traced_with_its_answer(tmp_path):
     [confirm] = [span for span in record["spans"] if span["name"] == "confirm"]
     assert confirm["action"] == "power(action=restart)"
     assert confirm["answer"] is True
+
+
+# --- main(): --reset-memory and the memory setting ------------------------------------
+
+
+def _fail(*_args, **_kwargs):
+    raise AssertionError("must not be called")
+
+
+@pytest.fixture
+def no_models(monkeypatch):
+    """Anything that would load a client, a brain or an audio model fails the test."""
+    monkeypatch.setattr(app.openai, "OpenAI", _fail)
+    monkeypatch.setattr(app, "Brain", _fail)
+    monkeypatch.setattr(app, "Assistant", _fail)
+    monkeypatch.setattr(app, "load_speaker", _fail)
+    monkeypatch.setattr(app, "load_microphone", _fail)
+    for module in (app.stt, app.tts, app.wake):
+        monkeypatch.setattr(module, "load", _fail)
+
+
+def _seeded_database(tmp_path):
+    path = tmp_path / "data" / "jarvis.sqlite3"
+    facts, history = Facts(path), History(path)
+    facts.add("my cat is called Mochi")
+    facts.add("my sister lives in Bandung")
+    history.save([{"role": "user", "content": "hi"}])
+    return path, facts, history
+
+
+def _run_main(monkeypatch, path, *argv, answer=None):
+    monkeypatch.setattr(app.config, "DB_FILE", path)
+    monkeypatch.setattr("sys.argv", ["jarvis", *argv])
+    prompts = []
+
+    def fake_input(prompt=""):
+        prompts.append(prompt)
+        if answer is None:
+            raise EOFError
+        return answer
+
+    monkeypatch.setattr("builtins.input", fake_input)
+    app.main()
+    return prompts
+
+
+def test_reset_memory_after_yes_empties_both_tables(
+    no_models, monkeypatch, tmp_path, capsys
+):
+    path, facts, history = _seeded_database(tmp_path)
+
+    prompts = _run_main(monkeypatch, path, "--reset-memory", answer="y")
+
+    assert prompts == ["Delete all remembered facts and saved history? [y/N] "]
+    assert facts.all() == []
+    assert history.load() == []
+    assert "Deleted 2 facts and 1 saved turns." in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("answer", ["n", "", "maybe", "yes but wait"])
+def test_reset_memory_changes_nothing_without_a_clear_yes(
+    no_models, monkeypatch, tmp_path, capsys, answer
+):
+    path, facts, history = _seeded_database(tmp_path)
+
+    _run_main(monkeypatch, path, "--reset-memory", answer=answer)
+
+    assert len(facts.all()) == 2
+    assert len(history.load()) == 1
+    assert "Nothing was deleted." in capsys.readouterr().out
+
+
+def test_reset_memory_with_no_answer_available_changes_nothing(
+    no_models, monkeypatch, tmp_path
+):
+    path, facts, _history = _seeded_database(tmp_path)
+
+    _run_main(monkeypatch, path, "--reset-memory")  # input() raises EOFError
+
+    assert len(facts.all()) == 2
+
+
+def test_reset_memory_does_not_create_a_missing_file(
+    no_models, monkeypatch, tmp_path, capsys
+):
+    path = tmp_path / "data" / "jarvis.sqlite3"
+
+    prompts = _run_main(monkeypatch, path, "--reset-memory", answer="y")
+
+    assert prompts == []  # nothing to ask about
+    assert not path.exists()
+    assert not path.parent.exists()
+    assert "nothing to delete" in capsys.readouterr().out
+
+
+def test_reset_memory_with_memory_off_creates_nothing(
+    no_models, monkeypatch, tmp_path, capsys
+):
+    monkeypatch.chdir(tmp_path)
+
+    prompts = _run_main(monkeypatch, None, "--reset-memory", answer="y")
+
+    assert prompts == []
+    assert list(tmp_path.iterdir()) == []
+    assert "JARVIS_DB_FILE=off" in capsys.readouterr().out
+
+
+class _StubClient:
+    def __init__(self, *_args, **_kwargs):
+        pass
+
+
+def _brain_kwargs(monkeypatch, path):
+    """The keyword arguments `main` gives the Brain in a typed-only run."""
+    seen = {}
+
+    def fake_brain(*_args, **kwargs):
+        seen.update(kwargs)
+        return FakeBrain(kwargs["confirm"])
+
+    monkeypatch.setattr(app.openai, "OpenAI", _StubClient)
+    monkeypatch.setattr(app, "Brain", fake_brain)
+    _run_main(monkeypatch, path, "--no-voice")  # the typed loop ends at EOF
+    return seen
+
+
+def test_with_memory_off_main_offers_no_memory_and_creates_no_file(
+    monkeypatch, tmp_path
+):
+    monkeypatch.chdir(tmp_path)
+
+    kwargs = _brain_kwargs(monkeypatch, None)
+
+    assert "remember" not in kwargs["tools"]
+    assert "forget" not in kwargs["tools"]
+    assert kwargs["history"] is None
+    assert kwargs["facts"] is None
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_with_memory_on_main_offers_the_memory_tools_history_and_facts(
+    monkeypatch, tmp_path
+):
+    kwargs = _brain_kwargs(monkeypatch, tmp_path / "jarvis.sqlite3")
+
+    assert {"remember", "forget"} <= set(kwargs["tools"])
+    assert isinstance(kwargs["history"], History)
+    assert kwargs["facts"]() == []

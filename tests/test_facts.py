@@ -197,3 +197,13 @@ def test_nine_or_more_digits_in_a_row_are_refused(text):
 )
 def test_ordinary_facts_are_not_secret(text):
     assert not looks_secret(text)
+
+
+def test_clear_deletes_every_fact_and_counts_them(tmp_path):
+    facts = make(tmp_path)
+    facts.add("my cat is called Mochi")
+    facts.add("my sister lives in Bandung")
+
+    assert facts.clear() == 2
+    assert facts.all() == []
+    assert facts.clear() == 0

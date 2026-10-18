@@ -13,6 +13,7 @@ work offline and cost nothing. Only playing music and the web summaries need the
 - Turn the screen on when it is off ("wake up the screen", "nyalakan layar").
 - Play a song on YouTube Music ("putar lagu Tulus Hati-Hati di Jalan", "play Yellow by Coldplay"). A new request pauses the old song and opens the new one in a new Firefox tab.
 - Read the web and answer out loud, naming the source: the news ("berita hari ini apa?", "any news about Indonesia's economy?") from Google News, facts ("look it up on the internet: who is Tulus?") from Wikipedia, and a summary of a website you name ("summarize bbc.com", "rangkum isi kompas.com"). Nothing is opened on screen.
+- Remember short facts and forget them again, only when you ask ("remember that my cat is called Mochi", "ingat bahwa kakak saya tinggal di Bandung", "forget the cat", "lupakan soal kucing"). It does not store passwords, keys or long numbers.
 - Shut down or restart the PC, but only after you say yes.
 
 ```
@@ -58,6 +59,7 @@ command. Jarvis stops listening after a second of silence.
 |---|---|
 | `uv run jarvis` | Typing and voice, replies printed and spoken |
 | `uv run jarvis --no-voice` | Typing only, nothing spoken, starts in a second |
+| `uv run jarvis --reset-memory` | Delete all remembered facts and saved history after a `[y/N]` question, then exit (see [Safety](#safety)) |
 | `exit` or `quit` | Leave (Ctrl+C works too) |
 
 `python` is not on the PATH on a stock Windows install, so run everything through `uv run`.
@@ -100,6 +102,13 @@ OpenAI itself, and the system prompt was tuned for the small local model.
   only things sent out are the song name you ask for (to YouTube Music, to find it), the
   topic or address of a web request (to Google News, Wikipedia or that site), and the pages
   Firefox loads for music. The text of a web page goes only to your local model.
+- Jarvis keeps a memory file (`data/jarvis.sqlite3`, or `JARVIS_DB_FILE`), in plain text and
+  only on this PC. It holds what was said (the last 100 turns; the newest 10 from the past 12
+  hours are loaded when Jarvis starts) and the facts you asked it to remember (at most 30).
+  Both are sent only as part of the prompt to the model at `JARVIS_BASE_URL`, nowhere else.
+  Turns that used `web_lookup` are never saved, and passwords, keys and long numbers are
+  refused. To wipe it, run `uv run jarvis --reset-memory` or delete the file. A successful
+  "forget" also clears the saved conversation. `JARVIS_DB_FILE=off` turns memory off.
 
 ## Troubleshooting
 
@@ -123,7 +132,8 @@ OpenAI itself, and the system prompt was tuned for the small local model.
 - Web summaries use only plain page text: sites that need JavaScript, a login or block
   programs (many news sites answer 401 or 403) get "could not read that page". Jarvis
   reads the first 4000 characters, so it summarises the top of a page, not all of it. A
-  page can make the summary wrong, but it cannot make Jarvis do anything.
+  page can make the summary wrong, but a turn that read the web cannot remember or forget
+  anything, and shutdown still needs your yes.
 - Whisper sometimes mishears one- or two-word commands, and writes "computer" for
   "komputer", so Jarvis may then answer in English.
 - Answers and actions depend on a small 4B model. After a time question it may answer a
@@ -135,7 +145,8 @@ OpenAI itself, and the system prompt was tuned for the small local model.
 - If the whole PC is asleep, not just the screen, Windows suspends Jarvis and it cannot hear
   you. Untested: with the PC locked Jarvis should keep listening, which means anyone nearby
   could talk to it, including answering yes to a shutdown question.
-- Windows only, one user, no memory between runs.
+- Windows only, one user. Between runs Jarvis recalls only the last 10 turns from the past
+  12 hours and up to 30 facts you asked it to remember.
 
 ## Development
 
@@ -155,6 +166,11 @@ src/jarvis/app.py     typing and voice loop, confirmations
 src/jarvis/brain.py   conversation with the model, runs the tool calls
 src/jarvis/tools.py   the actions Jarvis can take
 src/jarvis/web.py     news, Wikipedia and page summaries (plain urllib, no browser)
+src/jarvis/netguard.py  refuses private network addresses for web pages
+src/jarvis/db.py      the SQLite memory file and its schema
+src/jarvis/history.py the saved conversation turns
+src/jarvis/facts.py   the remembered facts and their rules
+src/jarvis/memory_tools.py  the remember and forget tools
 src/jarvis/stt.py     microphone recording and Whisper
 src/jarvis/wake.py    "Hey Jarvis" detection
 src/jarvis/tts.py     Supertonic voice

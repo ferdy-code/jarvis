@@ -96,3 +96,12 @@ def test_clear_removes_every_saved_turn(tmp_path):
     assert history.load() == []
     with closing(db.connect(history.path)) as conn:
         assert conn.execute("SELECT COUNT(*) FROM turns").fetchone() == (0,)
+
+
+def test_clear_deletes_every_turn_and_counts_them(tmp_path):
+    history = make(tmp_path)
+    history.save(turn(1))
+    history.save(turn(2))
+
+    assert history.clear() == 2
+    assert history.load() == []

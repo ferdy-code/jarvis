@@ -46,6 +46,11 @@ It's a learning project that should also be reliable enough for daily use, so th
 | `browser` | `browser.py` | Opens web pages in a chosen Firefox profile; says whether Firefox is playing; presses the play/pause media key | — |
 | `music` | `music.py` | Finds a song on YouTube Music (`ytmusicapi`) | — |
 | `web` | `web.py` | Fetches Google News headlines, a Wikipedia opening or one web page with `urllib` and has the model, with no tools, turn it into a short spoken answer. Never imports `browser` | — |
+| `db` | `db.py` | Opens (and on first use creates) the SQLite memory file; schema version 1 | — |
+| `history` | `history.py` | The conversation turns saved between runs | `db` |
+| `facts` | `facts.py` | The facts the user asked Jarvis to remember, and the rules for them | `db` |
+| `memory_tools` | `memory_tools.py` | The `remember` and `forget` tools | `facts`, `system-tools` |
+| `netguard` | `netguard.py` | Refuses private network addresses, also after redirects | — |
 | `app` | `app.py` | CLI entry, wires input → brain → output | all |
 
 **Build order:** `brain` + `system-tools`, then `app` (typed chat), then `tts`, then `stt`, then `wake`.
@@ -92,6 +97,14 @@ Each tool is a plain function that returns a short string for the LLM to work in
 - It saves after each turn and keeps the newest 100 rows. At start it loads the newest 10 (`brain.MAX_TURNS`, imported so the two cannot differ) that are under 12 hours old, oldest first. The age cut exists because a turn from yesterday carries stale tool results ("volume 40%", "playing ...") and an old language can pull the reply into the wrong language. A row that is not valid JSON is skipped.
 - Turns using `FORGOTTEN_TOOLS` are neither kept nor saved. Turns using `UNSAVED_TOOLS = {"web_lookup"}` stay in memory for this run only: text taken from a web page must not come back after a restart.
 - A failing load (Jarvis starts with an empty history) or save prints one line and never changes the reply.
+
+### `db`, `facts` and `memory_tools`: what is remembered
+
+- **`db.connect(path)`** creates the folder and the file, and the two tables on first use (`turns`: `id`, `ts`, `messages` JSON; `facts`: `id`, `ts`, `text`, `key` unique). `PRAGMA user_version` is 1; a file with a higher version raises an error and is left alone. Every operation opens its own connection, because the typed thread and the voice thread can both write. `JARVIS_DB_FILE` (default `data/jarvis.sqlite3`, `off` or empty for none) names the file; `data/` is in `.gitignore`. With `off`, `app.main` builds no `History` or `Facts`, registers no memory tool and creates no file, so behaviour is as before the feature.
+- **`Facts(path)`** has `all()` (oldest first), `add(text)` (`"added"` or `"duplicate"`), `remove(query)` (every fact whose key contains the query, returns them) and `clear()`. Rules, each a `ValueError` with a message the model can read aloud: text is whitespace-collapsed and 3-200 characters; at most 30 facts, and a full store refuses instead of dropping one; `remove` needs 3 characters so "forget a" cannot wipe everything; `looks_secret` refuses 9 or more digits in a row (spaces and dashes removed) and the whole words `password`, `passwd`, `kata sandi`, `pin`, `otp`, `token`, `api key`, `secret`, `cvv` ("pin" inside another word is allowed). It is a short word list and will miss paraphrases; the tool description is the first line of defence.
+- **`memory_tools.build(facts)`** returns `remember(fact)` (`remembered: ...`, `already remembered` or `error: ...`) and `forget(fact)` (one `forgot: ...` line per removed fact, `nothing matched` or `error: ...`). Neither is dangerous (no spoken yes), both are in `FORGOTTEN_TOOLS`, and both have `refused_after={"web_lookup"}`. There is no `recall` tool: at most 30 short facts are simply shown to the model (see `brain`), which avoids one more tool-choice decision for the 4B model. Shortening these descriptions to one sentence each made "news today" call `get_datetime` first (6 of 126), so the longer wording stays.
+- **`Tool.refused_after`** is a set of tool names. If any was already called in the current turn, `_execute` returns `error: not allowed in a turn that read web content` and does not run the tool.
+- **Prompt-injection rules.** (1) The reading step of `web_lookup` has no tools, but its summary goes back to the main model, which has them, so a page can still try to talk the model into calling a tool. (2) So `remember` and `forget` refuse in any turn that called `web_lookup`; otherwise a page could write instructions into memory that sit in every later prompt. (3) A `web_lookup` turn is never saved to disk, so page text cannot return after a restart. (4) Facts reach the prompt only in the labelled facts block, as data.
 
 ### `tts`
 
@@ -148,6 +161,8 @@ Each tool is a plain function that returns a short string for the LLM to work in
 ### `app`
 
 - `uv run jarvis` starts typed input plus voice. `uv run jarvis --no-voice` starts typed input only.
+- `uv run jarvis --reset-memory` is handled right after the arguments are read, before the OpenAI client or any voice model exists. With memory off it says so; if the database file does not exist it says there is nothing to delete and does not create it (`db.connect` would). Otherwise it asks `Delete all remembered facts and saved history? [y/N]` through `is_yes`, and only a clear yes runs `Facts.clear()` and `History.clear()` (both return the row count) and prints `Deleted N facts and M saved turns.`; anything else, or no answer to read, prints `Nothing was deleted.`. Then it exits.
+- **Memory wiring:** unless `JARVIS_DB_FILE` is `off`, `main` merges `memory_tools.build(Facts(path))` into the tools and gives the `Brain` a `History(path)` and `facts=Facts.all`.
 - **Main thread:** reads typed lines. `exit` or `quit` stops Jarvis.
 - **Voice thread (daemon):** loops wake → beep → `stt.listen()` → `brain.ask()` → print + `tts.speak()`.
 - One lock around `brain.ask` + `speak`, so typed and voice turns never overlap.
@@ -173,6 +188,8 @@ Plain module-level constants, read once from environment variables with defaults
 | `JARVIS_VOICE` | `M2` |
 | `JARVIS_WAKE_THRESHOLD` | `0.5` |
 | `JARVIS_FIREFOX_PROFILE` | `Keina Nara` |
+| `JARVIS_TRACE_FILE` | `logs/trace.jsonl` (`off` for none) |
+| `JARVIS_DB_FILE` | `data/jarvis.sqlite3` (`off` for none) |
 
 Switching to OpenAI means setting `JARVIS_BASE_URL=https://api.openai.com/v1`, `JARVIS_MODEL=<model>` and `JARVIS_API_KEY=<key>`, with no code changes. `enable_thinking` is sent only when the base URL is local.
 
@@ -182,6 +199,7 @@ Switching to OpenAI means setting `JARVIS_BASE_URL=https://api.openai.com/v1`, `
 Install:      uv sync
 Run:          uv run jarvis
 Run (typed):  uv run jarvis --no-voice
+Wipe memory:  uv run jarvis --reset-memory   # asks, deletes facts + history, exits
 Test:         uv run pytest -q
 Lint:         uv run ruff check src tests
 Format:       uv run ruff format src tests
@@ -199,6 +217,11 @@ src/jarvis/app.py        → CLI loop, voice thread, confirm prompts
 src/jarvis/brain.py      → LLM conversation + tool loop
 src/jarvis/tools.py      → system tools + TOOLS registry
 src/jarvis/web.py        → news, Wikipedia and page summaries (urllib, no browser)
+src/jarvis/netguard.py   → public-address check and redirect guard for web pages
+src/jarvis/db.py         → SQLite memory file and schema
+src/jarvis/history.py    → saved conversation turns
+src/jarvis/facts.py      → remembered facts and their rules
+src/jarvis/memory_tools.py → the remember and forget tools
 src/jarvis/tts.py        → Supertonic speak()
 src/jarvis/stt.py        → record + faster-whisper listen()
 src/jarvis/wake.py       → openWakeWord wait_for_wake_word()
@@ -256,7 +279,7 @@ TOOLS: dict[str, Tool] = {
   - `tests/test_brain.py`: `Brain` with a fake client that returns scripted responses. Covers a plain answer, a single tool call, a dangerous tool confirmed or refused, the 3-round tool-call cap, history trimming, and the server-down message.
 - **Manual checks** (listed in the plan per task): `scripts/smoke_audio.py` for mic, Whisper and TTS; a real wake-word session; a real volume and lock run.
 - **After every new tool or prompt change, run:** `scripts/check_conversation.py 3` (must read 75/75 and 75/75), the 12-command trial, the shutdown question/goodbye/order probe (0 false requests, every real order understood), and sampling of each tool group with ordinary questions that must open or run nothing. Three times a new tool made a different, older behaviour regress (restart question, goodnight, reply language), and a check that passed three rounds in a row failed later because the server state changed, so repeat before believing a pass.
-- **Tool choice check:** `uv run python scripts/check_tools.py 3` (needs LlamaStash) sends 28 typical requests 3 times each to the real model with every tool replaced by a recorder, and checks the first tool and its main arguments (news, wiki and page requests in both languages, clock, volume, music, power, and ordinary questions or requests for tools that no longer exist, which must call nothing). It must read `wrong: 0 of 84`. Found by it: "berita terbaru hari ini" first called `get_datetime` (3 of 3) until the description said the news needs no date check, and "search google for ..." called `web_lookup` page until the description said it cannot search Google.
+- **Tool choice check:** `uv run python scripts/check_tools.py 3` (needs LlamaStash) sends 42 typical requests 3 times each to the real model with every tool replaced by a recorder, and checks the first tool and its main arguments (news, wiki and page requests in both languages, clock, volume, music, power, remember and forget in both languages, and ordinary questions or requests for tools that no longer exist, which must call nothing). It must read `wrong: 0 of 126`. It flips between runs at temperature 0 when a tool is added, so run it 4 or more times. Found by it: "berita terbaru hari ini" first called `get_datetime` (3 of 3) until the description said the news needs no date check, and "search google for ..." called `web_lookup` page until the description said it cannot search Google.
 - **Model behaviour check:** `uv run python scripts/check_conversation.py` (needs LlamaStash) runs multi-turn English/Indonesian chats against the real model with a clock that moves on every call, so a stale or wrong-language answer fails. Run it after any change to `SYSTEM_PROMPT` or the tool descriptions. The prompt wording is load-bearing with the 4B model and unit tests cannot see it.
 - No coverage percentage target. Every function in `tools.py` and `brain.py` has at least one test.
 - `uv run pytest -q` and `uv run ruff check` must pass before each commit.

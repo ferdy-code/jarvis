@@ -1,6 +1,6 @@
 # Spec: Jarvis Memory and Web Guard
 
-Status: draft 2026-10-18 · Extends [SPEC.md](SPEC.md) · Read [CLAUDE.md](CLAUDE.md) first: its rules (tool descriptions and the prompt are load-bearing, run the real-model checks after every change to them, delegate to `task-worker`) apply to every task below.
+Status: implemented (Tasks 16-21 in `tasks/todo.md`); [SPEC.md](../SPEC.md) is the current record where it differs, and this file is the original design. 2026-10-18 · Extends [SPEC.md](SPEC.md) · Read [CLAUDE.md](CLAUDE.md) first: its rules (tool descriptions and the prompt are load-bearing, run the real-model checks after every change to them, delegate to `task-worker`) apply to every task below.
 
 ## Objective
 
@@ -124,6 +124,7 @@ Rules, all raising `ValueError` with a message the model can read aloud (the too
 1. The reading step of `web_lookup` already runs with no tools, but its summary returns to the main model, which has tools. So a page can still *talk the main model into calling a tool*.
 2. Therefore `remember` and `forget` refuse in any turn that already called `web_lookup`. Without this, a web page could write instructions into persistent memory that then sit in every future prompt.
 3. Turns that used `web_lookup` are never saved to disk, so page-derived text cannot come back after a restart.
+   Decided later (Task 19): a successful `forget` also clears the saved conversation, because an ordinary chat turn about the fact ("what is my cat called?") is kept and brought the forgotten fact back after a restart.
 4. Facts reach the prompt labelled as data, and the facts block is the only place stored text enters the system prompt.
 
 ## Commands

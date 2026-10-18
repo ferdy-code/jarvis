@@ -3,6 +3,7 @@ import re
 import threading
 import time
 from contextlib import ExitStack
+from pathlib import Path
 
 import numpy as np
 import openai
@@ -200,6 +201,26 @@ def load_microphone() -> bool:
     return True
 
 
+def reset_memory() -> None:
+    """Delete the saved history and facts after a clear yes. Loads no model."""
+    path = config.DB_FILE
+    if path is None:
+        print("Memory is off (JARVIS_DB_FILE=off), so there is nothing to delete.")
+        return
+    if not Path(path).exists():  # db.connect would create it
+        print(f"There is no memory file at {path}, so there is nothing to delete.")
+        return
+    try:
+        answer = input("Delete all remembered facts and saved history? [y/N] ")
+    except EOFError, KeyboardInterrupt:
+        answer = ""
+    if not is_yes(answer):
+        print("Nothing was deleted.")
+        return
+    facts, turns = Facts(path).clear(), History(path).clear()
+    print(f"Deleted {facts} facts and {turns} saved turns.")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="jarvis", description="Local assistant.")
     parser.add_argument(
@@ -207,7 +228,15 @@ def main() -> None:
         action="store_true",
         help="typed input and printed replies only: no wake word, no speaking",
     )
+    parser.add_argument(
+        "--reset-memory",
+        action="store_true",
+        help="delete all remembered facts and saved history (asks first), then exit",
+    )
     args = parser.parse_args()
+    if args.reset_memory:
+        reset_memory()
+        return
 
     client = openai.OpenAI(
         base_url=config.BASE_URL,

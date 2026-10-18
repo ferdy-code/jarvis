@@ -60,6 +60,11 @@ class Facts:
             )
         return "added"
 
+    def clear(self) -> int:
+        """Delete every fact; returns how many there were."""
+        with closing(db.connect(self.path)) as conn, conn:
+            return conn.execute("DELETE FROM facts").rowcount
+
     def remove(self, query: str) -> list[str]:
         """Remove every fact containing the query; returns what was removed."""
         key = _normalise(query).casefold()
