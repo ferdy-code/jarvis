@@ -20,6 +20,29 @@ SAMPLES = int(sys.argv[1]) if len(sys.argv) > 1 else 3
 
 # (phrase, expected tool or None for "no tool", expected arguments that must match)
 CASES = [
+    ("what's the news today?", "web_lookup", {"kind": "news", "language": "en"}),
+    ("berita terbaru hari ini apa?", "web_lookup", {"kind": "news", "language": "id"}),
+    ("any news about Indonesia's economy?", "web_lookup", {"kind": "news"}),
+    ("ada kabar apa tentang MSCI Indonesia?", "web_lookup", {"kind": "news"}),
+    ("look it up on the internet: who is Tulus?", "web_lookup", {"kind": "wiki"}),
+    (
+        "cari di internet siapa itu Raisa",
+        "web_lookup",
+        {"kind": "wiki", "language": "id"},
+    ),
+    ("search the web and tell me who built the Eiffel Tower", "web_lookup", {}),
+    ("cari tahu di internet kapan Jakarta didirikan", "web_lookup", {"language": "id"}),
+    ("summarize bbc.com for me", "web_lookup", {"kind": "page"}),
+    (
+        "rangkum isi kompas.com",
+        "web_lookup",
+        {"kind": "page", "language": "id"},
+    ),
+    ("what is on the front page of theverge.com?", "web_lookup", {"kind": "page"}),
+    ("bacakan ringkasan situs detik.com", "web_lookup", {"kind": "page"}),
+    ("open youtube", None, {}),
+    ("search google for nasi goreng recipe", None, {}),
+    ("explain how a CPU works", None, {}),
     ("what time is it?", "get_datetime", {}),
     ("baterai berapa persen?", "get_battery", {}),
     ("turn the volume up", "set_volume", {"direction": "up"}),

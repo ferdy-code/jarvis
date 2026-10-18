@@ -3,7 +3,7 @@
 A personal assistant for your Windows PC that you can type to or talk to, in English or
 Indonesian. Say "Hey Jarvis" and a command, and it answers out loud. The language model,
 speech recognition and voice all run on your own machine, so chatting and controlling the PC
-work offline and cost nothing. Only playing music needs the internet.
+work offline and cost nothing. Only playing music and the web summaries need the internet.
 
 ## What it can do
 
@@ -12,6 +12,7 @@ work offline and cost nothing. Only playing music needs the internet.
 - Change the volume (up, down, mute, unmute) and lock the screen.
 - Turn the screen on when it is off ("wake up the screen", "nyalakan layar").
 - Play a song on YouTube Music ("putar lagu Tulus Hati-Hati di Jalan", "play Yellow by Coldplay"). A new request pauses the old song and opens the new one in a new Firefox tab.
+- Read the web and answer out loud, naming the source: the news ("berita hari ini apa?", "any news about Indonesia's economy?") from Google News, facts ("look it up on the internet: who is Tulus?") from Wikipedia, and a summary of a website you name ("summarize bbc.com", "rangkum isi kompas.com"). Nothing is opened on screen.
 - Shut down or restart the PC, but only after you say yes.
 
 ```
@@ -91,8 +92,9 @@ OpenAI itself, and the system prompt was tuned for the small local model.
   silence, cancels.
 - Microphone audio is only kept in memory while it is processed, never written to disk.
 - Your conversation stays on your PC unless you point `JARVIS_BASE_URL` somewhere else. The
-  only things sent out are the song name you ask for (to YouTube Music, to find it) and the
-  pages Firefox loads when you ask for them.
+  only things sent out are the song name you ask for (to YouTube Music, to find it), the
+  topic or address of a web request (to Google News, Wikipedia or that site), and the pages
+  Firefox loads for music. The text of a web page goes only to your local model.
 
 ## Troubleshooting
 
@@ -113,6 +115,10 @@ OpenAI itself, and the system prompt was tuned for the small local model.
 - Every song opens a new Firefox tab, so tabs pile up until you close them.
 - Playing music needs autoplay allowed for `music.youtube.com` (see Troubleshooting) and the
   internet.
+- Web summaries use only plain page text: sites that need JavaScript, a login or block
+  programs (many news sites answer 401 or 403) get "could not read that page". Jarvis
+  reads the first 4000 characters, so it summarises the top of a page, not all of it. A
+  page can make the summary wrong, but it cannot make Jarvis do anything.
 - Whisper sometimes mishears one- or two-word commands, and writes "computer" for
   "komputer", so Jarvis may then answer in English.
 - Answers and actions depend on a small 4B model. After a time question it may answer a
@@ -143,6 +149,7 @@ wording matters a lot to the small model, and unit tests cannot see it.
 src/jarvis/app.py     typing and voice loop, confirmations
 src/jarvis/brain.py   conversation with the model, runs the tool calls
 src/jarvis/tools.py   the actions Jarvis can take
+src/jarvis/web.py     news, Wikipedia and page summaries (plain urllib, no browser)
 src/jarvis/stt.py     microphone recording and Whisper
 src/jarvis/wake.py    "Hey Jarvis" detection
 src/jarvis/tts.py     Supertonic voice

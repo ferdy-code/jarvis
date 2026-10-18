@@ -172,3 +172,21 @@ def test_wake_screen_is_a_safe_tool_that_says_what_it_cannot_do():
     assert tool.dangerous is False
     assert "cannot turn the screen off" in description
     assert "cannot unlock" in description
+
+
+def test_web_lookup_is_registered_and_never_touches_the_browser(monkeypatch):
+    from jarvis import browser, web
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("web_lookup used the browser")
+
+    for name in ("open_url", "pause_if_playing", "nudge_mouse"):
+        monkeypatch.setattr(browser, name, forbidden)
+    monkeypatch.setattr(web, "_get", lambda *args, **kwargs: b"<rss/>")
+
+    entry = tools.TOOLS["web_lookup"]
+    kind = entry.schema["function"]["parameters"]["properties"]["kind"]
+
+    assert entry.fn("news", "", "en").startswith("error:")
+    assert kind["enum"] == ["news", "wiki", "page"]
+    assert not entry.dangerous

@@ -45,6 +45,7 @@ It's a learning project that should also be reliable enough for daily use, so th
 | `language` | `language.py` | Tells English from Indonesian by function words; None when unsure | — |
 | `browser` | `browser.py` | Opens web pages in a chosen Firefox profile; says whether Firefox is playing; presses the play/pause media key | — |
 | `music` | `music.py` | Finds a song on YouTube Music (`ytmusicapi`) | — |
+| `web` | `web.py` | Fetches Google News headlines, a Wikipedia opening or one web page with `urllib` and has the model, with no tools, turn it into a short spoken answer. Never imports `browser` | — |
 | `app` | `app.py` | CLI entry, wires input → brain → output | all |
 
 **Build order:** `brain` + `system-tools`, then `app` (typed chat), then `tts`, then `stt`, then `wake`.
@@ -61,6 +62,7 @@ Each tool is a plain function that returns a short string for the LLM to work in
 | `lock_pc` | — | `rundll32.exe user32.dll,LockWorkStation` | no |
 | `wake_screen` | — | Moves the mouse one pixel and back (`mouse_event`), which wakes a display that is off. Measured: display OFF, then ON 0.24 s after the call. Returns a note that a locked PC stays locked | no |
 | `play_music` | `query` | Finds the best matching song with `ytmusicapi`, pauses whatever Firefox is playing (only if it is playing, because Play/Pause is a toggle), opens `music.youtube.com/watch?v=ID` in the Keina Nara profile, then waits up to 8 s for Firefox to start playing. Replies `playing 'Title' by Artist`, or says no sound started and autoplay may be blocked, so it never claims success on a silent page. Measured: 3.7-4.7 s, the old song paused before the new one, the tab title became the song's | no |
+| `web_lookup` | `kind`: `news`, `wiki` or `page`; `query`; `language`: `en` or `id` | A spoken summary from the internet (see the `web` section); answers aloud and opens nothing. `news`: a short topic, or empty for the top stories. `wiki`: the user's whole question. `page`: a web address (a spoken `bbc.com` gets `https://`). The result starts "Tell the user this, keeping the source's name, and call no more tools:" because without it the main model retold the answer and dropped the source; errors end "Tell the user so and call no more tools." One tool with a `kind` argument, not three, because every added tool has shifted older behaviour. Not in `FORGOTTEN_TOOLS` (a summary may be asked about again) | no |
 | `power` | `action: shutdown\|restart` | `shutdown /s /t 5` or `shutdown /r /t 5` | **yes** |
 
 - `TOOLS: dict[str, Tool]` holds `fn`, `schema` and `dangerous`. That's the only registry, with no plugin system.
@@ -123,6 +125,16 @@ Each tool is a plain function that returns a short string for the LLM to work in
 
 - `find_song(query)` takes the first of three `ytmusicapi` song results that has a video id and returns `Song(title, artist, video_id)`, or None. 9 of 9 named songs, English and Indonesian, matched the right title and artist in 0.4-1.0 s. The client is created once. It needs the internet but no login.
 
+### `web`: spoken summaries from the internet
+
+- **Sources, all plain `urllib`, no key, no new dependency:** Google News RSS for `news` (6 headlines, each ending with its outlet; `hl`/`gl`/`ceid` pick Indonesia or the US), the Wikipedia API of the user's language for `wiki` (openings of the 4 best matches, 500 characters each; the first match is often not the one with the answer), and any `http(s)` address for `page`. Search engines were tried and rejected: DuckDuckGo refuses connections on this network, Bing returned unrelated pages, Brave, Mojeek and Startpage answered with captcha pages.
+- **`page`:** `page_address` adds `https://` to a bare domain and refuses other schemes (`file:`, `javascript:`, `ftp:`), a host without a dot and spaces. `readable_text` uses the stdlib `html.parser` to drop `script`, `style`, `nav`, `header`, `footer`, `svg`, `noscript` and `template`, then collapses whitespace; the first 1.5 MB are read and the first 4000 characters of text are shown to the model. Under 300 characters of text (a login, a paywall, a JavaScript-only page) is reported as "could not read that page", not summarised. Probed from this PC before writing code: bbc.com, kompas.com, detik.com, cnnindonesia.com, tempo.co, theverge.com, news.ycombinator.com and Wikipedia answered 200 in 0.1-0.8 s; nytimes.com answered 403 and reuters.com 401; an expired certificate fails verification and is reported.
+- **Failures:** timeout (8 s per network step), HTTP errors (401, 403, ...), SSL or connection errors, a bad address and thin text each return `error: could not read that page (<reason>). Tell the user so and call no more tools.` Nothing is guessed. Without the last sentence the main model kept calling tools after a failure.
+- **The reading step has no tools:** `_read` makes one chat request with a system prompt that calls the text between `<web>` tags data, never instructions, and offers no `tools`. A page can make the answer wrong but cannot make the reading step do anything. The answer is then returned to the main model, which does have tools (shutdown and restart still need a spoken yes), so this is a mitigation, not a wall.
+- **No browser:** `web.py` never imports `browser` (a test parses its imports and fails if it does); Firefox stays reserved for `play_music`.
+- **Measured (real model, real network, 2 runs of 12 requests, all routed to `web_lookup`):** news 2.6-3.7 s, Wikipedia 2.4-3.8 s, pages 2.2-4.3 s from question to reply; a refused or thin page 1.1-1.4 s. The 4B reader's summaries matched the fetched text; a news topic with few headlines ("harga emas") gets a vague summary.
+- **Limits:** Wikipedia rate-limits bursts (HTTP 429). A page is read as plain text only: no JavaScript, no logins, no following links, first 4000 characters only. A site name without an address ("BBC") is refused. A fetched address is not checked against private networks (the user dictates it).
+
 ### `app`
 
 - `uv run jarvis` starts typed input plus voice. `uv run jarvis --no-voice` starts typed input only.
@@ -176,6 +188,7 @@ src/jarvis/__init__.py   → main() entry point (already wired in pyproject [pro
 src/jarvis/app.py        → CLI loop, voice thread, confirm prompts
 src/jarvis/brain.py      → LLM conversation + tool loop
 src/jarvis/tools.py      → system tools + TOOLS registry
+src/jarvis/web.py        → news, Wikipedia and page summaries (urllib, no browser)
 src/jarvis/tts.py        → Supertonic speak()
 src/jarvis/stt.py        → record + faster-whisper listen()
 src/jarvis/wake.py       → openWakeWord wait_for_wake_word()
@@ -233,7 +246,7 @@ TOOLS: dict[str, Tool] = {
   - `tests/test_brain.py`: `Brain` with a fake client that returns scripted responses. Covers a plain answer, a single tool call, a dangerous tool confirmed or refused, the 3-round tool-call cap, history trimming, and the server-down message.
 - **Manual checks** (listed in the plan per task): `scripts/smoke_audio.py` for mic, Whisper and TTS; a real wake-word session; a real volume and lock run.
 - **After every new tool or prompt change, run:** `scripts/check_conversation.py 3` (must read 75/75 and 75/75), the 12-command trial, the shutdown question/goodbye/order probe (0 false requests, every real order understood), and sampling of each tool group with ordinary questions that must open or run nothing. Three times a new tool made a different, older behaviour regress (restart question, goodnight, reply language), and a check that passed three rounds in a row failed later because the server state changed, so repeat before believing a pass.
-- **Tool choice check:** `uv run python scripts/check_tools.py 3` (needs LlamaStash) sends 13 typical requests 3 times each to the real model with every tool replaced by a recorder, and checks the first tool and its main arguments (clock, volume, music, power, and ordinary questions that must call nothing). It must read `wrong: 0 of 39`.
+- **Tool choice check:** `uv run python scripts/check_tools.py 3` (needs LlamaStash) sends 28 typical requests 3 times each to the real model with every tool replaced by a recorder, and checks the first tool and its main arguments (news, wiki and page requests in both languages, clock, volume, music, power, and ordinary questions or requests for tools that no longer exist, which must call nothing). It must read `wrong: 0 of 84`. Found by it: "berita terbaru hari ini" first called `get_datetime` (3 of 3) until the description said the news needs no date check, and "search google for ..." called `web_lookup` page until the description said it cannot search Google.
 - **Model behaviour check:** `uv run python scripts/check_conversation.py` (needs LlamaStash) runs multi-turn English/Indonesian chats against the real model with a clock that moves on every call, so a stale or wrong-language answer fails. Run it after any change to `SYSTEM_PROMPT` or the tool descriptions. The prompt wording is load-bearing with the 4B model and unit tests cannot see it.
 - No coverage percentage target. Every function in `tools.py` and `brain.py` has at least one test.
 - `uv run pytest -q` and `uv run ruff check` must pass before each commit.

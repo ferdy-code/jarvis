@@ -7,6 +7,7 @@ import psutil
 from pycaw.pycaw import AudioUtilities
 
 from jarvis import browser, music
+from jarvis.web import web_lookup
 
 
 @dataclass(frozen=True)
@@ -144,6 +145,38 @@ TOOLS: dict[str, Tool] = {
             }
         },
         required=["query"],
+    ),
+    "web_lookup": _tool(
+        web_lookup,
+        # Answers aloud. It never opens a page or a browser.
+        "Read something from the internet and say a short summary aloud, naming the "
+        "source. Use it for the news of today or any day (without checking the date "
+        "first), for an encyclopedia answer about a person, place or event, and for "
+        "summarising a website whose address the user gives. It does not open "
+        "anything on screen "
+        "and cannot search Google. Questions you can answer yourself "
+        "(general knowledge, maths, jokes, chat) get a normal spoken answer, never "
+        "this tool.",
+        properties={
+            "kind": {
+                "type": "string",
+                "enum": ["news", "wiki", "page"],
+                "description": "news = current headlines; wiki = encyclopedia "
+                "article; page = summary of one website",
+            },
+            "query": {
+                "type": "string",
+                "description": "news: a short topic, or empty for the top stories; "
+                "wiki: the user's question in full; page: the website address "
+                "such as example.com",
+            },
+            "language": {
+                "type": "string",
+                "enum": ["en", "id"],
+                "description": "The language the user is speaking",
+            },
+        },
+        required=["kind", "query", "language"],
     ),
     "wake_screen": _tool(
         wake_screen,
